@@ -6,7 +6,7 @@ at the domain boundary.
 """
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
@@ -112,7 +112,9 @@ class Tool(BaseModel):
 
     name: str = Field(description="Tool name identifier")
     description: str = Field(description="Tool purpose description")
-    inputSchema: dict[str, Any] = Field(description="JSON Schema for parameters")
+    inputSchema: dict[str, Any] = Field(  # noqa: N815 (MCP spec requires camelCase)
+        description="JSON Schema for parameters"
+    )
 
     model_config = {"frozen": True}
 
@@ -126,38 +128,38 @@ class ExecuteTestsParams(BaseModel):
     Follows STYLE_GUIDE.md tool specification (lines 364-417).
     """
 
-    node_ids: Optional[list[str]] = Field(
+    node_ids: list[str] | None = Field(
         default=None,
         description="Specific test node IDs to execute (e.g., 'tests/test_user.py::test_login')",
     )
-    markers: Optional[str] = Field(
+    markers: str | None = Field(
         default=None,
         description="Pytest marker expression for filtering (e.g., 'not slow and integration')",
     )
-    keywords: Optional[str] = Field(
+    keywords: str | None = Field(
         default=None,
         description="Keyword expression for test name matching (e.g., 'test_user')",
     )
-    verbosity: Optional[int] = Field(
+    verbosity: int | None = Field(
         default=None,
         description="Output verbosity level: -2 (quietest) to 2 (most verbose)",
         ge=-2,
         le=2,
     )
-    failfast: Optional[bool] = Field(
+    failfast: bool | None = Field(
         default=None,
         description="Stop execution on first failure",
     )
-    maxfail: Optional[int] = Field(
+    maxfail: int | None = Field(
         default=None,
         description="Stop execution after N failures",
         ge=1,
     )
-    show_capture: Optional[bool] = Field(
+    show_capture: bool | None = Field(
         default=None,
         description="Include captured stdout/stderr in test output",
     )
-    timeout: Optional[int] = Field(
+    timeout: int | None = Field(
         default=None,
         description="Execution timeout in seconds",
         ge=1,
@@ -189,18 +191,18 @@ class DiscoverTestsParams(BaseModel):
     Follows STYLE_GUIDE.md tool specification (lines 442-485).
     """
 
-    path: Optional[str] = Field(
+    path: str | None = Field(
         default=None,
         description="Directory or file path to discover tests within (default: project root)",
     )
-    pattern: Optional[str] = Field(
+    pattern: str | None = Field(
         default=None,
         description="Test file pattern (default: 'test_*.py' or '*_test.py')",
     )
 
     @field_validator("path")
     @classmethod
-    def validate_no_path_traversal(cls, v: Optional[str]) -> Optional[str]:
+    def validate_no_path_traversal(cls, v: str | None) -> str | None:
         """Validate path does not contain directory traversal sequences.
 
         Security constraint: Prevent path traversal attacks via '..' sequences.
@@ -211,8 +213,7 @@ class DiscoverTestsParams(BaseModel):
         if v is None:
             return v
 
-        # Normalize path to detect traversal attempts
-        normalized = Path(v).as_posix()
+        # Check for directory traversal attempts
         if ".." in Path(v).parts:
             raise ValueError(
                 f"Path traversal not allowed: '{v}' contains '..' sequences. "

@@ -28,8 +28,7 @@ def test_list_tools_returns_array_with_two_tool_definitions() -> None:
 
     # Assert: Function should return list with exactly 2 tool definitions
     assert len(result) == 2, (
-        "list_tools should return exactly 2 tool definitions "
-        "(execute_tests and discover_tests)"
+        "list_tools should return exactly 2 tool definitions (execute_tests and discover_tests)"
     )
 
 
@@ -49,9 +48,7 @@ def test_list_tools_includes_execute_tests_tool() -> None:
     tool_names = [tool.name for tool in result]
 
     # Assert: "execute_tests" tool should be present
-    assert "execute_tests" in tool_names, (
-        'list_tools should include a tool named "execute_tests"'
-    )
+    assert "execute_tests" in tool_names, 'list_tools should include a tool named "execute_tests"'
 
 
 def test_list_tools_includes_discover_tests_tool() -> None:
@@ -67,9 +64,7 @@ def test_list_tools_includes_discover_tests_tool() -> None:
     tool_names = [tool.name for tool in result]
 
     # Assert: "discover_tests" tool should be present
-    assert "discover_tests" in tool_names, (
-        'list_tools should include a tool named "discover_tests"'
-    )
+    assert "discover_tests" in tool_names, 'list_tools should include a tool named "discover_tests"'
 
 
 def test_each_tool_has_description_field() -> None:
@@ -84,9 +79,9 @@ def test_each_tool_has_description_field() -> None:
     result = list_tools()
 
     # Assert: Each tool has description field
-    assert all(
-        hasattr(tool, "description") and tool.description for tool in result
-    ), "Each tool definition must include a description field"
+    assert all(hasattr(tool, "description") and tool.description for tool in result), (
+        "Each tool definition must include a description field"
+    )
 
 
 def test_each_tool_has_input_schema_field() -> None:
@@ -101,9 +96,9 @@ def test_each_tool_has_input_schema_field() -> None:
     result = list_tools()
 
     # Assert: Each tool has inputSchema field
-    assert all(
-        hasattr(tool, "inputSchema") and tool.inputSchema for tool in result
-    ), "Each tool definition must include an inputSchema field"
+    assert all(hasattr(tool, "inputSchema") and tool.inputSchema for tool in result), (
+        "Each tool definition must include an inputSchema field"
+    )
 
 
 def test_execute_tests_schema_includes_all_eight_parameters() -> None:
@@ -204,7 +199,6 @@ def test_discover_tests_path_parameter_includes_security_validation() -> None:
     # Act: Extract path parameter schema
     schema_properties = discover_tests_tool.inputSchema.get("properties", {})
     path_schema = schema_properties.get("path", {})
-    path_description = path_schema.get("description", "").lower()
 
     # Assert: Path parameter schema is properly defined
     # path_schema is the schema dict for the "path" parameter itself
