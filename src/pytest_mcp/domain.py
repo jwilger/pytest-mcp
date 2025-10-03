@@ -21,7 +21,7 @@ class ProtocolVersion(BaseModel):
     @classmethod
     def validate_supported_version(cls, v: str) -> str:
         """Ensure protocol version is supported."""
-        supported = "2024-11-05"
+        supported = "2025-03-26"
         if v != supported:
             msg = f"Protocol version {v} not supported. Supported version: {supported}"
             raise ValueError(msg)

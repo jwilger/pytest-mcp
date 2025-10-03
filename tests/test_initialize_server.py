@@ -6,7 +6,7 @@ Test the workflow function directly before drilling down to components.
 
 import pytest
 
-from pytest_mcp.domain import ServerCapabilities, ServerInfo, initialize_server
+from pytest_mcp.domain import ProtocolError, ServerCapabilities, ServerInfo, initialize_server
 
 
 def test_initialize_server_succeeds_with_supported_protocol_version() -> None:
@@ -14,8 +14,8 @@ def test_initialize_server_succeeds_with_supported_protocol_version() -> None:
 
     Acceptance Criteria (Story 1, Scenario 1):
       Given an AI agent with MCP client capability
-      When the agent sends MCP initialize request with protocol version "2024-11-05"
-      Then the server responds with protocol version "2024-11-05"
+      When the agent sends MCP initialize request with protocol version "2025-03-26"
+      Then the server responds with protocol version "2025-03-26"
       And the server includes serverInfo with name "pytest-mcp" and version number
       And the server indicates capabilities for tools and resources
 
@@ -23,7 +23,7 @@ def test_initialize_server_succeeds_with_supported_protocol_version() -> None:
     Single assertion: The function should return a tuple (not raise NotImplementedError).
     """
     # Act: Call the workflow function we're testing
-    result = initialize_server(protocol_version="2024-11-05")
+    result = initialize_server(protocol_version="2025-03-26")
 
     # Assert: Function should return a tuple of (ProtocolVersion, ServerInfo, ServerCapabilities)
     assert isinstance(

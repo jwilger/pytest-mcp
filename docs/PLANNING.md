@@ -175,8 +175,8 @@ AI agents connect to pytest-mcp server and establish communication through the M
 ```gherkin
 Scenario: AI agent successfully initializes connection
   Given an AI agent with MCP client capability
-  When the agent sends MCP initialize request with protocol version "2024-11-05"
-  Then the server responds with protocol version "2024-11-05"
+  When the agent sends MCP initialize request with protocol version "2025-03-26"
+  Then the server responds with protocol version "2025-03-26"
   And the server includes serverInfo with name "pytest-mcp" and version number
   And the server indicates capabilities for tools and resources
 
@@ -186,7 +186,7 @@ Scenario: AI agent requests unsupported protocol version
   Then the server responds with JSON-RPC error code -32600
   And the error.data includes field "protocolVersion"
   And the error.data includes received_value "2020-01-01"
-  And the error.data includes supported_version "2024-11-05"
+  And the error.data includes supported_version "2025-03-26"
   And the error.data.detail explains "Protocol version not supported. Please retry initialization with supported version."
 ```
 
