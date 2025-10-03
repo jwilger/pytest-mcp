@@ -184,8 +184,10 @@ Scenario: AI agent requests unsupported protocol version
   Given an AI agent sending initialize request
   When the agent specifies protocol version "2020-01-01"
   Then the server responds with JSON-RPC error code -32600
-  And the error data includes supported protocol version "2024-11-05"
-  And the error message indicates protocol version incompatibility
+  And the error.data includes field "protocolVersion"
+  And the error.data includes received_value "2020-01-01"
+  And the error.data includes supported_version "2024-11-05"
+  And the error.data.detail explains "Protocol version not supported. Please retry initialization with supported version."
 ```
 
 #### References
