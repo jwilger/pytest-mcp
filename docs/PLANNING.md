@@ -54,7 +54,7 @@ Development infrastructure MUST be established in specific order:
 
 **Epic**: Infrastructure
 **Priority**: P0 (SECOND - after Story 8 Nix environment)
-**Status**: Not Started
+**Status**: Complete
 
 #### Description
 
@@ -602,7 +602,7 @@ uvx support requires proper package entry points and standard Python packaging. 
 
 **Epic**: Infrastructure
 **Priority**: P0
-**Status**: Not Started
+**Status**: Complete
 
 #### Description
 
@@ -655,7 +655,7 @@ Nix flake should pin all dependencies for reproducibility. Development tools sho
 
 **Epic**: Infrastructure
 **Priority**: P0
-**Status**: Not Started
+**Status**: Complete
 
 #### Description
 
