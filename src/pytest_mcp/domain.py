@@ -6,7 +6,7 @@ at the domain boundary.
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
@@ -99,6 +99,22 @@ class ServerCapabilities(BaseModel):
 
 
 # Story 2: MCP Tool Discovery Domain Types
+
+
+class Tool(BaseModel):
+    """MCP tool definition with name, description, and JSON Schema.
+
+    Represents a discoverable MCP tool with its parameter schema.
+    Parse Don't Validate: Only valid tool definitions can be constructed.
+
+    Follows STYLE_GUIDE.md tool discovery pattern.
+    """
+
+    name: str = Field(description="Tool name identifier")
+    description: str = Field(description="Tool purpose description")
+    inputSchema: dict[str, Any] = Field(description="JSON Schema for parameters")
+
+    model_config = {"frozen": True}
 
 
 class ExecuteTestsParams(BaseModel):
@@ -207,8 +223,22 @@ class DiscoverTestsParams(BaseModel):
     model_config = {"frozen": True, "extra": "forbid"}
 
 
-# Workflow function signatures (Story 1 scope only)
+# Workflow function signatures
 # Implementation deferred to TDD phase (N.7)
+
+
+def list_tools() -> list[Tool]:
+    """List all available MCP tools with their parameter schemas.
+
+    Returns tool definitions for pytest execution and discovery capabilities.
+
+    Returns:
+        List of Tool definitions with names, descriptions, and JSON schemas
+
+    Raises:
+        NotImplementedError: Implementation deferred to TDD phase
+    """
+    raise NotImplementedError()
 
 
 def initialize_server(
