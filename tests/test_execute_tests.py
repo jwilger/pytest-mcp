@@ -66,3 +66,45 @@ def test_execute_tests_summary_total_reflects_actual_test_count() -> None:
         f"Expected summary.total to be 2 (matching fixture test count), "
         f"but got {result.summary.total}"
     )
+
+
+def test_execute_tests_filters_by_node_ids() -> None:
+    """Verify node_ids parameter filters which tests execute.
+
+    Acceptance Criteria (Story 4, Scenario 2):
+      Given a project with multiple pytest tests
+      When the agent calls execute_tests with specific node_ids
+      Then only the specified tests execute
+      And summary.total reflects only the filtered test count
+
+    TDD Round 3: Verify execute_tests respects node_ids parameter filtering.
+    The fixture directory tests/fixtures/sample_tests/ contains exactly 2 tests:
+      - test_passing
+      - test_another_passing
+
+    When node_ids specifies only test_passing, exactly 1 test should execute.
+
+    Single assertion: summary.total should equal 1 (only the specified test).
+
+    Expected to FAIL: Current implementation ignores params.node_ids and always
+    executes all tests in the hardcoded fixture directory. The command at line 691
+    hardcodes the path and doesn't use node_ids for filtering.
+    """
+    # Arrange: Create parameters targeting only one specific test
+    params = ExecuteTestsParams(
+        node_ids=["tests/fixtures/sample_tests/test_sample.py::test_passing"]
+    )
+
+    # Act: Execute tests with node_ids filter
+    result = execute_tests(params)
+
+    # Assert: Result is success response (not error)
+    assert isinstance(result, ExecuteTestsResponse)
+
+    # Assert: Summary total should be 1 (only the specified test executed)
+    assert result.summary.total == 1, (
+        f"Expected summary.total to be 1 when filtering by node_ids=['test_passing'], "
+        f"but got {result.summary.total}. "
+        "The execute_tests implementation should pass node_ids to pytest command "
+        "instead of executing all tests in the hardcoded directory."
+    )

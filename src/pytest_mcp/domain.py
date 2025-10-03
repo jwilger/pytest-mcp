@@ -687,8 +687,11 @@ def execute_tests(
     """
     import re
 
-    # Build pytest command targeting fixture tests (avoid infinite recursion)
-    cmd = ["pytest", "tests/fixtures/sample_tests/", "-v"]
+    # Build pytest command - use node_ids if provided, else default to fixtures
+    if params.node_ids:
+        cmd = ["pytest", *params.node_ids, "-v"]
+    else:
+        cmd = ["pytest", "tests/fixtures/sample_tests/", "-v"]
 
     # Execute pytest with timeout and exception handling
     try:
