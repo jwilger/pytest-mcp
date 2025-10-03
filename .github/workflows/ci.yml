@@ -1,0 +1,155 @@
+name: CI Quality Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run tests
+        run: uv run pytest
+
+  mypy:
+    name: mypy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run mypy type checking (strict mode)
+        run: uv run mypy .
+
+  ruff-check:
+    name: ruff-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run ruff linting (ALL rules)
+        run: uv run ruff check .
+
+  ruff-format:
+    name: ruff-format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Check code formatting
+        run: uv run ruff format --check .
+
+  bandit:
+    name: bandit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run security scanning
+        run: uv run bandit -r src/ -ll
+
+  mutmut:
+    name: mutmut
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run mutation testing
+        run: |
+          uv run mutmut run
+          TOTAL=$(uv run mutmut junitxml | grep -oP 'tests="\K[0-9]+' | head -1)
+          SURVIVING=$(uv run mutmut junitxml | grep -oP 'failures="\K[0-9]+' | head -1)
+          if [ -n "$TOTAL" ] && [ -n "$SURVIVING" ]; then
+            if [ "$TOTAL" -eq 0 ]; then
+              echo "No mutations were generated. Skipping mutation score calculation."
+            else
+              KILLED=$((TOTAL - SURVIVING))
+              SCORE=$((KILLED * 100 / TOTAL))
+              echo "Mutation score: ${SCORE}%"
+              if [ $SCORE -lt 80 ]; then
+                echo "ERROR: Mutation score ${SCORE}% is below minimum threshold of 80%"
+                exit 1
+              fi
+            fi
+          else
+            echo "No mutations to test"
+          fi

@@ -2,7 +2,7 @@
   description = "pytest-mcp: MCP server providing standardized pytest execution for AI agents";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
