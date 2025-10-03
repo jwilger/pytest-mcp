@@ -1,0 +1,61 @@
+# Pre-commit hooks configuration
+# These hooks match EXACTLY the checks run in .github/workflows/ci.yml
+# If pre-commit passes, PR should pass
+
+repos:
+  # Ruff formatting check (matches: uv run ruff format --check .)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff-format
+        name: ruff-format (check only)
+        args: [--check]
+
+  # Ruff linting (matches: uv run ruff check .)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        name: ruff-check
+        args: [--fix, --exit-non-zero-on-fix]
+
+  # Mypy type checking (matches: uv run mypy .)
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        name: mypy (strict mode)
+        additional_dependencies: [mcp>=1.16.0, pytest>=8.0.0]
+        args: [.]
+
+  # Pytest (matches: uv run pytest)
+  # Note: Pre-commit runs on Python 3.12 locally, PR runs on both 3.12 and 3.13
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: uv run pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+
+  # Bandit security scanning (matches: uv run bandit -r src/ -ll)
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.0
+    hooks:
+      - id: bandit
+        name: bandit (security scan)
+        args: [-r, src/, -ll]
+        pass_filenames: false
+
+  # Mutmut mutation testing (matches: CI mutation testing with 80% threshold)
+  # WARNING: Mutation testing is SLOW - disabled by default
+  # Uncomment to enable mutation testing in pre-commit
+  # - repo: local
+  #   hooks:
+  #     - id: mutmut
+  #       name: mutmut (mutation testing - SLOW)
+  #       entry: bash -c 'uv run mutmut run && TOTAL=$(uv run mutmut junitxml | grep -oP "tests=\"\K[0-9]+" | head -1) && SURVIVING=$(uv run mutmut junitxml | grep -oP "failures=\"\K[0-9]+" | head -1) && if [ -n "$TOTAL" ] && [ -n "$SURVIVING" ]; then if [ "$TOTAL" -eq 0 ]; then echo "No mutations generated"; else KILLED=$((TOTAL - SURVIVING)); SCORE=$((KILLED * 100 / TOTAL)); echo "Mutation score: ${SCORE}%"; if [ $SCORE -lt 80 ]; then echo "ERROR: Mutation score ${SCORE}% below 80% threshold"; exit 1; fi; fi; else echo "No mutations to test"; fi'
+  #       language: system
+  #       pass_filenames: false
+  #       always_run: true
