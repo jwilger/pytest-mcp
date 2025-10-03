@@ -86,3 +86,35 @@ def test_discover_tests_filters_by_path() -> None:
     assert all(
         test.file == "tests/test_test_discovery.py" for test in result.tests
     ), "All discovered tests should be from the specified path"
+
+
+def test_discover_tests_filters_by_pattern() -> None:
+    """Verify discover_tests filters tests by specified pattern.
+
+    Acceptance Criteria (Story 3, Scenario 3):
+      Given a project with test files matching pattern *_spec.py
+      When the agent calls discover_tests with pattern "*_spec.py"
+      Then the server discovers tests from *_spec.py files
+      And test_*.py files are not included
+      And the response includes all matching test functions
+
+    Test Strategy:
+      Since we only have test_*.py files in this project (no *_spec.py files),
+      we test pattern filtering by specifying a non-matching pattern.
+      When pattern="*_spec.py", NO tests should be discovered because we
+      don't have any files matching that pattern.
+
+    Single assertion: count should be 0 when pattern doesn't match any files.
+
+    Expected to FAIL: Implementation doesn't use pattern parameter yet.
+    Currently ignores pattern and discovers all test_*.py files.
+    """
+    # Act: Discover tests with pattern that doesn't match our test files
+    params = DiscoverTestsParams(pattern="*_spec.py")
+    result = discover_tests(params)
+
+    # Assert: Should find NO tests because pattern doesn't match our files
+    assert result.count == 0, (
+        "discover_tests should find 0 tests when pattern '*_spec.py' doesn't "
+        "match any files (we only have test_*.py files)"
+    )

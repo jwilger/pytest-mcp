@@ -416,6 +416,8 @@ def discover_tests(
     cmd = ["pytest", "--collect-only", "-q"]
     if params.path:
         cmd.append(params.path)
+    if params.pattern:
+        cmd.extend(["-o", f"python_files={params.pattern}"])
 
     # Execute pytest subprocess
     result = subprocess.run(
