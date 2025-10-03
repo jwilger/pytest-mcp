@@ -224,6 +224,102 @@ class DiscoverTestsParams(BaseModel):
     model_config = {"frozen": True, "extra": "forbid"}
 
 
+# Story 3: Test Discovery Response Domain Types
+
+
+class DiscoveredTest(BaseModel):
+    """Individual test item discovered by pytest collection.
+
+    Represents a single test with hierarchical organization (module, class, function)
+    and source location information. Parse Don't Validate: Only valid test items
+    can be constructed.
+
+    Follows STYLE_GUIDE.md successful test discovery pattern (lines 671-720).
+    """
+
+    node_id: str = Field(
+        description="pytest node identifier for execution targeting (e.g., 'tests/test_user.py::TestUserAuth::test_login')"
+    )
+    module: str = Field(description="Python module path (e.g., 'tests.test_user')")
+    class_: str | None = Field(
+        default=None,
+        alias="class",
+        description="Test class name (null for function-based tests)",
+    )
+    function: str = Field(description="Test function name")
+    file: str = Field(description="Source file path")
+    line: int = Field(description="Line number in source file", ge=1)
+
+    model_config = {"frozen": True, "populate_by_name": True}
+
+
+class CollectionError(BaseModel):
+    """Collection error encountered during test discovery.
+
+    Structured error object providing actionable diagnostic information for
+    AI agents to autonomously fix collection failures (syntax errors, import
+    failures, etc.). Parse Don't Validate: Only valid error objects can be
+    constructed.
+
+    Follows STYLE_GUIDE.md collection error pattern (lines 721-803).
+    """
+
+    file: str = Field(description="Source file path where collection error occurred")
+    error_type: str = Field(
+        description="Error classification (SyntaxError, ImportError, CollectionError, etc.)"
+    )
+    message: str = Field(description="Human-readable error description")
+    line: int | None = Field(
+        default=None, description="Line number where error occurred (null if not available)"
+    )
+    traceback: str | None = Field(
+        default=None,
+        description="Full traceback text for diagnostic purposes (null if not available)",
+    )
+
+    model_config = {"frozen": True}
+
+
+class DiscoverTestsResponse(BaseModel):
+    """Response structure for test discovery operation.
+
+    Contains discovered tests, total count, and collection errors. Parse Don't
+    Validate: Response succeeds even with collection errors, enabling AI agents
+    to process partial results and autonomously fix issues.
+
+    Follows STYLE_GUIDE.md test discovery response patterns (lines 671-803).
+    """
+
+    tests: list[DiscoveredTest] = Field(
+        description="Array of discovered test items with hierarchical organization"
+    )
+    count: int = Field(
+        description="Total tests discovered (reflects only successfully discovered tests)", ge=0
+    )
+    collection_errors: list[CollectionError] = Field(
+        default_factory=list, description="Collection warnings/errors (empty when discovery succeeds cleanly)"
+    )
+
+    @model_validator(mode="after")
+    def validate_count_matches_tests(self) -> "DiscoverTestsResponse":
+        """Validate that count field matches length of tests array.
+
+        Ensures count accuracy per STYLE_GUIDE.md requirement that count
+        reflects usable tests (excludes files with collection errors).
+
+        Raises:
+            ValueError: When count does not match tests array length
+        """
+        if self.count != len(self.tests):
+            raise ValueError(
+                f"Count mismatch: count field ({self.count}) must match tests array length ({len(self.tests)}). "
+                "Count reflects only successfully discovered tests."
+            )
+        return self
+
+    model_config = {"frozen": True}
+
+
 # Workflow function signatures
 # Implementation deferred to TDD phase (N.7)
 

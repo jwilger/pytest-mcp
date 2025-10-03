@@ -718,6 +718,89 @@ This style guide defines the **protocol design system** for pytest-mcp, an MCP (
 
 **USER NEED**: AI agents explore test suite structure to select relevant tests. Hierarchical structure enables filtering by module, class, or function patterns.
 
+#### Template: Test Discovery with Collection Errors
+
+**Scenario**: Test discovery encounters collection errors (syntax errors, import failures) but successfully discovers some tests
+
+**Response Structure**:
+```json
+{
+  "tests": [
+    {
+      "node_id": "tests/test_valid.py::test_one",
+      "module": "tests.test_valid",
+      "class": null,
+      "function": "test_one",
+      "file": "tests/test_valid.py",
+      "line": 5
+    },
+    {
+      "node_id": "tests/test_valid.py::test_two",
+      "module": "tests.test_valid",
+      "class": null,
+      "function": "test_two",
+      "file": "tests/test_valid.py",
+      "line": 9
+    }
+  ],
+  "count": 2,
+  "collection_errors": [
+    {
+      "file": "tests/test_broken.py",
+      "error_type": "SyntaxError",
+      "message": "invalid syntax (test_broken.py, line 10)",
+      "line": 10,
+      "traceback": "  File \"tests/test_broken.py\", line 10\n    def test_foo(\n               ^\nSyntaxError: invalid syntax"
+    },
+    {
+      "file": "tests/test_import_fail.py",
+      "error_type": "ImportError",
+      "message": "cannot import name 'NonExistent' from 'mymodule'",
+      "line": null,
+      "traceback": "ImportError: cannot import name 'NonExistent' from 'mymodule' (/path/to/mymodule.py)"
+    }
+  ]
+}
+```
+
+**Collection Error Object Structure**:
+- `file`: Source file path where collection error occurred
+- `error_type`: Error classification ("SyntaxError", "ImportError", "CollectionError", etc.)
+- `message`: Human-readable error description
+- `line`: Line number where error occurred (null if not available)
+- `traceback`: Full traceback text for diagnostic purposes (null if not available)
+
+**Field Specifications**:
+- `count`: Reflects **only successfully discovered tests** (excludes files with collection errors)
+- `collection_errors`: Array of structured error objects (empty when discovery succeeds cleanly)
+- Each error object provides actionable diagnostic information
+
+**AI Agent Usage Pattern**:
+1. Check `collection_errors` array first to identify broken test files
+2. Use `file` and `line` fields to locate exact source of error
+3. Examine `traceback` for detailed diagnostic context
+4. Take autonomous corrective action based on `error_type`:
+   - SyntaxError → fix syntax at specified line
+   - ImportError → resolve import or add missing dependency
+   - CollectionError → fix pytest configuration or test structure
+5. Proceed with discovered tests in `tests` array after addressing errors
+
+**WHY THIS STRUCTURE**:
+- **Parse Don't Validate**: Collection errors are data, not failures. Response succeeds even with errors, enabling AI agents to process partial results
+- **Autonomous Correction**: Structured error objects (file, line, type) enable AI agents to fix issues without human intervention
+- **Diagnostic Completeness**: Full traceback preserves all pytest diagnostic information for complex error scenarios
+- **Count Accuracy**: `count` field reflects usable tests, preventing AI agents from expecting tests that don't exist
+
+**DESIGN ALTERNATIVES**:
+- Fail entire request on collection error: Simpler
+- **REJECTED**: Prevents AI agents from working with partial test suite; blocks autonomous error correction
+- Plain text error messages without structure: Simpler
+- **REJECTED**: Forces AI agents to parse text, reducing reliability of autonomous fixes
+
+**USER NEED**: AI agents must autonomously diagnose and fix test collection errors during development. Structured error objects with file/line/type enable precise corrective actions without human intervention.
+
+**CONSISTENCY**: Error structure mirrors validation error pattern (field-level details, actionable information) established in "Validation Errors as Structured Data" section.
+
 ### Design Rationale: Templates
 
 **CONSISTENCY**: All response structures follow JSON-RPC 2.0 specification. Success responses have `result` field; errors have `error` field.
