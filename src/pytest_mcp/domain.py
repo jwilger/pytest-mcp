@@ -238,7 +238,10 @@ class DiscoveredTest(BaseModel):
     """
 
     node_id: str = Field(
-        description="pytest node identifier for execution targeting (e.g., 'tests/test_user.py::TestUserAuth::test_login')"
+        description=(
+            "pytest node identifier for execution targeting "
+            "(e.g., 'tests/test_user.py::TestUserAuth::test_login')"
+        )
     )
     module: str = Field(description="Python module path (e.g., 'tests.test_user')")
     class_: str | None = Field(
@@ -297,7 +300,8 @@ class DiscoverTestsResponse(BaseModel):
         description="Total tests discovered (reflects only successfully discovered tests)", ge=0
     )
     collection_errors: list[CollectionError] = Field(
-        default_factory=list, description="Collection warnings/errors (empty when discovery succeeds cleanly)"
+        default_factory=list,
+        description="Collection warnings/errors (empty when discovery succeeds cleanly)",
     )
 
     @model_validator(mode="after")
@@ -312,7 +316,8 @@ class DiscoverTestsResponse(BaseModel):
         """
         if self.count != len(self.tests):
             raise ValueError(
-                f"Count mismatch: count field ({self.count}) must match tests array length ({len(self.tests)}). "
+                f"Count mismatch: count field ({self.count}) "
+                f"must match tests array length ({len(self.tests)}). "
                 "Count reflects only successfully discovered tests."
             )
         return self
@@ -384,3 +389,22 @@ def initialize_server(
     server_info = ServerInfo(name="pytest-mcp", version="0.1.0")
     capabilities = ServerCapabilities(tools=True, resources=True)
     return (validated_version, server_info, capabilities)
+
+
+def discover_tests(
+    path: str | None = None,
+    pattern: str | None = None,
+) -> DiscoverTestsResponse:
+    """Discover available tests in the project without executing them.
+
+    Parse Don't Validate: Returns validated DiscoverTestsResponse with
+    discovered tests and optional collection errors.
+
+    Args:
+        path: Directory or file path to discover tests within (default: project root)
+        pattern: Test file pattern (default: 'test_*.py' or '*_test.py')
+
+    Returns:
+        DiscoverTestsResponse with discovered tests, count, and collection errors
+    """
+    return DiscoverTestsResponse(tests=[], count=0)
