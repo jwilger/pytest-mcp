@@ -234,11 +234,19 @@ def list_tools() -> list[Tool]:
 
     Returns:
         List of Tool definitions with names, descriptions, and JSON schemas
-
-    Raises:
-        NotImplementedError: Implementation deferred to TDD phase
     """
-    raise NotImplementedError()
+    return [
+        Tool(
+            name="execute_tests",
+            description="Execute pytest tests with filtering and output options",
+            inputSchema=ExecuteTestsParams.model_json_schema(),
+        ),
+        Tool(
+            name="discover_tests",
+            description="Discover available tests in the project",
+            inputSchema=DiscoverTestsParams.model_json_schema(),
+        ),
+    ]
 
 
 def initialize_server(
