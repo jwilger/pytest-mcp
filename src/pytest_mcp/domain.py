@@ -477,7 +477,7 @@ def discover_tests(
                 continue
 
             tests.append(
-                DiscoveredTest(
+                DiscoveredTest.model_construct(
                     node_id=node_id,
                     module=module,
                     class_=class_name,

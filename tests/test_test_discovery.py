@@ -83,9 +83,9 @@ def test_discover_tests_filters_by_path() -> None:
     result = discover_tests(params)
 
     # Assert: All discovered tests should be from the specified file
-    assert all(
-        test.file == "tests/test_test_discovery.py" for test in result.tests
-    ), "All discovered tests should be from the specified path"
+    assert all(test.file == "tests/test_test_discovery.py" for test in result.tests), (
+        "All discovered tests should be from the specified path"
+    )
 
 
 def test_discover_tests_filters_by_pattern() -> None:
