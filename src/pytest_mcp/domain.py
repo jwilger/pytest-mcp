@@ -5,6 +5,7 @@ the Parse Don't Validate philosophy. Types make illegal states unrepresentable
 at the domain boundary.
 """
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -251,7 +252,11 @@ class DiscoveredTest(BaseModel):
     )
     function: str = Field(description="Test function name")
     file: str = Field(description="Source file path")
-    line: int = Field(description="Line number in source file", ge=1)
+    line: int | None = Field(
+        default=None,
+        description="Line number in source file (null when not available from pytest output)",
+        ge=1,
+    )
 
     model_config = {"frozen": True, "populate_by_name": True}
 
@@ -392,19 +397,85 @@ def initialize_server(
 
 
 def discover_tests(
-    path: str | None = None,
-    pattern: str | None = None,
+    params: DiscoverTestsParams,
 ) -> DiscoverTestsResponse:
     """Discover available tests in the project without executing them.
 
-    Parse Don't Validate: Returns validated DiscoverTestsResponse with
+    Parse Don't Validate: Accepts validated DiscoverTestsParams with path
+    traversal protection, returns validated DiscoverTestsResponse with
     discovered tests and optional collection errors.
 
     Args:
-        path: Directory or file path to discover tests within (default: project root)
-        pattern: Test file pattern (default: 'test_*.py' or '*_test.py')
+        params: Validated discovery parameters with security constraints
 
     Returns:
         DiscoverTestsResponse with discovered tests, count, and collection errors
     """
-    return DiscoverTestsResponse(tests=[], count=0)
+    # Build pytest command for test discovery
+    # Use -q to get simpler output format
+    cmd = ["pytest", "--collect-only", "-q"]
+    if params.path:
+        cmd.append(params.path)
+
+    # Execute pytest subprocess
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+    )
+
+    # Parse pytest output to discover tests
+    # pytest --collect-only -q outputs lines like:
+    # tests/test_file.py::test_function
+    # tests/test_file.py::TestClass::test_method
+    tests: list[DiscoveredTest] = []
+    collection_errors: list[CollectionError] = []
+
+    for line in result.stdout.strip().split("\n"):
+        line = line.strip()
+        # Skip empty lines, separator lines, and summary lines
+        if not line or line.startswith("=") or "collected" in line.lower():
+            continue
+
+        # Look for lines containing "::" which indicate test node IDs
+        if "::" in line:
+            node_id = line
+            parts = node_id.split("::")
+
+            if len(parts) < 2:
+                continue
+
+            file_path = parts[0]
+
+            # Extract module from file path (e.g., "tests/test_user.py" -> "tests.test_user")
+            module = file_path.replace("/", ".").replace(".py", "")
+
+            # Determine if class-based or function-based test
+            if len(parts) == 3:
+                # Class-based test: file.py::TestClass::test_method
+                class_name = parts[1]
+                function_name = parts[2]
+            elif len(parts) == 2:
+                # Function-based test: file.py::test_function
+                class_name = None
+                function_name = parts[1]
+            else:
+                # Skip malformed lines
+                continue
+
+            tests.append(
+                DiscoveredTest(
+                    node_id=node_id,
+                    module=module,
+                    class_=class_name,
+                    function=function_name,
+                    file=file_path,
+                    line=None,  # pytest -q doesn't provide line numbers
+                )
+            )
+
+    return DiscoverTestsResponse(
+        tests=tests,
+        count=len(tests),
+        collection_errors=collection_errors,
+    )
