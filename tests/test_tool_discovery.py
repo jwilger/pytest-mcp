@@ -31,3 +31,24 @@ def test_list_tools_returns_array_with_two_tool_definitions() -> None:
         "list_tools should return exactly 2 tool definitions "
         "(execute_tests and discover_tests)"
     )
+
+
+def test_list_tools_includes_execute_tests_tool() -> None:
+    """Verify list_tools includes execute_tests tool with correct name.
+
+    Acceptance Criteria (Story 2, Scenario 1):
+      And the array includes "execute_tests" tool with complete inputSchema
+
+    This test verifies the first tool in the list has the correct name.
+    Single assertion: One tool should be named "execute_tests".
+
+    Outside-In TDD: Test the tool names before drilling down to schema validation.
+    """
+    # Act: Get tool definitions
+    result = list_tools()
+    tool_names = [tool.name for tool in result]
+
+    # Assert: "execute_tests" tool should be present
+    assert "execute_tests" in tool_names, (
+        'list_tools should include a tool named "execute_tests"'
+    )
