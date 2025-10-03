@@ -330,6 +330,179 @@ class DiscoverTestsResponse(BaseModel):
     model_config = {"frozen": True}
 
 
+# Story 4: Test Execution Response Domain Types
+
+
+class TestResult(BaseModel):
+    """Individual test result from pytest execution.
+
+    Represents a single test outcome with timing and diagnostic information.
+    Parse Don't Validate: Only valid test outcomes can be constructed.
+
+    Follows STYLE_GUIDE.md successful test execution pattern (lines 518-530).
+    """
+
+    node_id: str = Field(
+        description="pytest node identifier (e.g., 'tests/test_user.py::test_login')"
+    )
+    outcome: str = Field(description="Test outcome: 'passed', 'failed', 'skipped', or 'error'")
+    duration: float = Field(description="Test execution time in seconds", ge=0.0)
+    message: str | None = Field(
+        default=None, description="Error message for failed/error tests (null for passed/skipped)"
+    )
+    traceback: str | None = Field(
+        default=None, description="Full traceback for failed/error tests (null for passed/skipped)"
+    )
+
+    @field_validator("outcome")
+    @classmethod
+    def validate_outcome(cls, v: str) -> str:
+        """Validate test outcome is one of the allowed values.
+
+        Raises:
+            ValueError: When outcome is not a valid pytest outcome
+        """
+        valid_outcomes = {"passed", "failed", "skipped", "error"}
+        if v not in valid_outcomes:
+            raise ValueError(
+                f"Invalid test outcome: '{v}'. Must be one of: {', '.join(sorted(valid_outcomes))}"
+            )
+        return v
+
+    model_config = {"frozen": True}
+
+
+class ExecutionSummary(BaseModel):
+    """Aggregated test execution statistics.
+
+    Provides summary counts and total duration for test run analysis.
+    Parse Don't Validate: Only valid summary statistics can be constructed.
+
+    Follows STYLE_GUIDE.md summary structure (lines 510-516).
+    """
+
+    total: int = Field(description="Total number of tests executed", ge=0)
+    passed: int = Field(description="Number of tests that passed", ge=0)
+    failed: int = Field(description="Number of tests that failed", ge=0)
+    skipped: int = Field(description="Number of tests skipped", ge=0)
+    errors: int = Field(description="Number of tests with errors", ge=0)
+    duration: float = Field(description="Total execution time in seconds", ge=0.0)
+
+    @model_validator(mode="after")
+    def validate_totals(self) -> "ExecutionSummary":
+        """Validate that component counts sum to total.
+
+        Raises:
+            ValueError: When passed + failed + skipped + errors != total
+        """
+        sum_components = self.passed + self.failed + self.skipped + self.errors
+        if sum_components != self.total:
+            raise ValueError(
+                f"Summary count mismatch: total ({self.total}) must equal "
+                f"passed ({self.passed}) + failed ({self.failed}) + "
+                f"skipped ({self.skipped}) + errors ({self.errors}) = {sum_components}"
+            )
+        return self
+
+    model_config = {"frozen": True}
+
+
+class ExecuteTestsResponse(BaseModel):
+    """Response structure for test execution operation.
+
+    Contains execution results, summary statistics, and output. Parse Don't
+    Validate: Response structure validated at construction time.
+
+    Follows STYLE_GUIDE.md test execution response pattern (lines 500-570).
+    """
+
+    exit_code: int = Field(
+        description="pytest exit code: 0 (all passed), 1 (some failed), 5 (no tests collected)"
+    )
+    summary: ExecutionSummary = Field(description="Aggregated test execution statistics")
+    tests: list[TestResult] = Field(description="Individual test results with outcomes")
+    text_output: str = Field(description="pytest's native text output (preserves formatting)")
+
+    @field_validator("exit_code")
+    @classmethod
+    def validate_exit_code(cls, v: int) -> int:
+        """Validate exit code is a success/failure code (not error code).
+
+        Raises:
+            ValueError: When exit code indicates execution error (2, 3, 4)
+        """
+        valid_codes = {0, 1, 5}
+        if v not in valid_codes:
+            raise ValueError(
+                f"Invalid exit code for success response: {v}. "
+                f"Use ExecutionError for exit codes 2, 3, 4, or timeout. "
+                f"Valid success codes: {sorted(valid_codes)}"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def validate_count_matches_tests(self) -> "ExecuteTestsResponse":
+        """Validate that summary.total matches length of tests array.
+
+        Ensures count accuracy per STYLE_GUIDE.md requirement.
+
+        Raises:
+            ValueError: When summary.total does not match tests array length
+        """
+        if self.summary.total != len(self.tests):
+            raise ValueError(
+                f"Count mismatch: summary.total ({self.summary.total}) "
+                f"must match tests array length ({len(self.tests)})"
+            )
+        return self
+
+    model_config = {"frozen": True}
+
+
+class ExecutionError(BaseModel):
+    """Error details for failed test execution (exit codes 2-4 or timeout).
+
+    Provides diagnostic information for execution failures that prevent
+    pytest from completing normally. Parse Don't Validate: Only valid
+    execution errors can be constructed.
+
+    Follows STYLE_GUIDE.md execution failure pattern (lines 572-627).
+    """
+
+    exit_code: int = Field(
+        description=(
+            "pytest exit code: 2 (interrupted), 3 (internal error), "
+            "4 (usage error), or -1 (timeout)"
+        )
+    )
+    stdout: str = Field(description="Captured standard output")
+    stderr: str = Field(description="Captured standard error (contains diagnostic info)")
+    timeout_exceeded: bool = Field(description="Whether timeout caused the failure")
+    command: list[str] = Field(
+        description="Exact command executed (for reproduction)", min_length=1
+    )
+    duration: float = Field(description="Time spent before failure in seconds", ge=0.0)
+
+    @field_validator("exit_code")
+    @classmethod
+    def validate_exit_code(cls, v: int) -> int:
+        """Validate exit code is an error code (not success code).
+
+        Raises:
+            ValueError: When exit code indicates success (0, 1, 5)
+        """
+        error_codes = {-1, 2, 3, 4}
+        if v not in error_codes:
+            raise ValueError(
+                f"Invalid exit code for error response: {v}. "
+                f"Use ExecuteTestsResponse for exit codes 0, 1, 5. "
+                f"Valid error codes: {sorted(error_codes)}"
+            )
+        return v
+
+    model_config = {"frozen": True}
+
+
 # Workflow function signatures
 # Implementation deferred to TDD phase (N.7)
 
