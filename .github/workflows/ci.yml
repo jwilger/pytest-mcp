@@ -136,14 +136,19 @@ jobs:
       - name: Run mutation testing
         run: |
           uv run mutmut run
-          MUTATION_SCORE=$(uv run mutmut junitxml | grep -oP 'tests="\K[0-9]+' | head -1)
-          KILLED=$(uv run mutmut junitxml | grep -oP 'failures="\K[0-9]+' | head -1)
-          if [ -n "$MUTATION_SCORE" ] && [ -n "$KILLED" ]; then
-            SCORE=$((KILLED * 100 / MUTATION_SCORE))
-            echo "Mutation score: ${SCORE}%"
-            if [ $SCORE -lt 80 ]; then
-              echo "ERROR: Mutation score ${SCORE}% is below minimum threshold of 80%"
-              exit 1
+          TOTAL=$(uv run mutmut junitxml | grep -oP 'tests="\K[0-9]+' | head -1)
+          SURVIVING=$(uv run mutmut junitxml | grep -oP 'failures="\K[0-9]+' | head -1)
+          if [ -n "$TOTAL" ] && [ -n "$SURVIVING" ]; then
+            if [ "$TOTAL" -eq 0 ]; then
+              echo "No mutations were generated. Skipping mutation score calculation."
+            else
+              KILLED=$((TOTAL - SURVIVING))
+              SCORE=$((KILLED * 100 / TOTAL))
+              echo "Mutation score: ${SCORE}%"
+              if [ $SCORE -lt 80 ]; then
+                echo "ERROR: Mutation score ${SCORE}% is below minimum threshold of 80%"
+                exit 1
+              fi
             fi
           else
             echo "No mutations to test"
