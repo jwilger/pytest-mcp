@@ -99,7 +99,9 @@ class ServerCapabilities(BaseModel):
 # Implementation deferred to TDD phase (N.7)
 
 
-def initialize_server(protocol_version: str) -> tuple[ProtocolVersion, ServerInfo, ServerCapabilities]:
+def initialize_server(
+    protocol_version: str,
+) -> tuple[ProtocolVersion, ServerInfo, ServerCapabilities]:
     """Initialize MCP server connection with protocol version validation.
 
     Parse Don't Validate: Returns validated domain types or raises
@@ -125,9 +127,12 @@ def initialize_server(protocol_version: str) -> tuple[ProtocolVersion, ServerInf
             field="protocolVersion",
             received_value=protocol_version,
             supported_version="2025-03-26",
-            detail="Protocol version not supported. Please retry initialization with supported version.",
+            detail=(
+                "Protocol version not supported. "
+                "Please retry initialization with supported version."
+            ),
         )
-        raise ProtocolValidationError(protocol_error)
+        raise ProtocolValidationError(protocol_error) from None
 
     server_info = ServerInfo(name="pytest-mcp", version="0.1.0")
     capabilities = ServerCapabilities(tools=True, resources=True)
