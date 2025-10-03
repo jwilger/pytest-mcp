@@ -1,0 +1,139 @@
+"""Domain types for pytest-mcp server.
+
+This module defines workflow functions and minimal nominal types following
+the Parse Don't Validate philosophy. Types make illegal states unrepresentable
+at the domain boundary.
+"""
+
+from pydantic import BaseModel, Field, ValidationError, field_validator
+
+
+class ProtocolError(BaseModel):
+    """Validation error details for unsupported protocol versions.
+
+    Follows STYLE_GUIDE.md validation error pattern (lines 628-669).
+    Provides actionable information for AI agents to correct and retry.
+    """
+
+    field: str = Field(description="Parameter name that failed validation")
+    received_value: str = Field(description="Value that failed validation")
+    supported_version: str = Field(description="Version the server supports")
+    detail: str = Field(description="Actionable message for correction")
+
+    model_config = {"frozen": True}
+
+
+class ProtocolValidationError(ValueError):
+    """ValueError subclass carrying structured ProtocolError details.
+
+    Enables Parse Don't Validate philosophy: validation failures provide
+    actionable, structured error information for AI agents to correct and retry.
+
+    Follows STYLE_GUIDE.md validation error pattern by attaching field-level
+    validation details to exceptions.
+    """
+
+    def __init__(self, protocol_error: ProtocolError) -> None:
+        """Create validation error with structured protocol error details.
+
+        Args:
+            protocol_error: Structured error with field, value, and correction guidance
+        """
+        self.protocol_error = protocol_error
+        super().__init__(protocol_error.detail)
+
+
+class ProtocolVersion(BaseModel):
+    """MCP protocol version identifier.
+
+    Validates protocol version using Pydantic field_validator per ADR-005.
+    Parse Don't Validate: Only valid protocol versions can be constructed.
+    """
+
+    value: str = Field(description="Protocol version in YYYY-MM-DD format")
+
+    @field_validator("value")
+    @classmethod
+    def validate_supported_version(cls, v: str) -> str:
+        """Validate protocol version against supported version.
+
+        Raises:
+            ValueError: When protocol version is not supported
+        """
+        supported = "2025-03-26"
+        if v != supported:
+            raise ValueError(
+                f"Protocol version {v} not supported. "
+                f"Please retry initialization with supported version {supported}."
+            )
+        return v
+
+    model_config = {"frozen": True}
+
+
+class ServerInfo(BaseModel):
+    """Server metadata included in initialization response.
+
+    Contains server name and version number for AI agent compatibility checking.
+    """
+
+    name: str = Field(description="Server name identifier")
+    version: str = Field(description="Server version number")
+
+    model_config = {"frozen": True}
+
+
+class ServerCapabilities(BaseModel):
+    """Capabilities advertised by the server during initialization.
+
+    Indicates which MCP features are available (tools, resources, prompts, etc.).
+    """
+
+    tools: bool = Field(default=True, description="Server supports tool invocation")
+    resources: bool = Field(default=True, description="Server supports resource access")
+
+    model_config = {"frozen": True}
+
+
+# Workflow function signatures (Story 1 scope only)
+# Implementation deferred to TDD phase (N.7)
+
+
+def initialize_server(
+    protocol_version: str,
+) -> tuple[ProtocolVersion, ServerInfo, ServerCapabilities]:
+    """Initialize MCP server connection with protocol version validation.
+
+    Parse Don't Validate: Returns validated domain types or raises
+    ProtocolValidationError with structured ProtocolError details for
+    unsupported protocol versions.
+
+    Args:
+        protocol_version: Protocol version string from AI agent
+
+    Returns:
+        Tuple of validated protocol version, server info, and capabilities
+
+    Raises:
+        ProtocolValidationError: When protocol version is unsupported
+            (subclass of ValueError with protocol_error attribute)
+    """
+    try:
+        # Pydantic validation happens here (ADR-005 compliance)
+        validated_version = ProtocolVersion(value=protocol_version)
+    except ValidationError:
+        # Extract validation error and wrap in domain exception
+        protocol_error = ProtocolError(
+            field="protocolVersion",
+            received_value=protocol_version,
+            supported_version="2025-03-26",
+            detail=(
+                "Protocol version not supported. "
+                "Please retry initialization with supported version."
+            ),
+        )
+        raise ProtocolValidationError(protocol_error) from None
+
+    server_info = ServerInfo(name="pytest-mcp", version="0.1.0")
+    capabilities = ServerCapabilities(tools=True, resources=True)
+    return (validated_version, server_info, capabilities)

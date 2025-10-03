@@ -17,6 +17,7 @@ classifiers = [
 ]
 
 dependencies = [
+    "mcp>=1.16.0",
     "pytest>=8.0.0",
 ]
 
@@ -66,3 +67,6 @@ select = [
 
 [tool.bandit]
 exclude_dirs = ["tests"]
+
+[tool.mutmut]
+paths_to_mutate = ["src/"]

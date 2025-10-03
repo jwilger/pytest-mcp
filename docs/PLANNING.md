@@ -54,7 +54,7 @@ Development infrastructure MUST be established in specific order:
 
 **Epic**: Infrastructure
 **Priority**: P0 (SECOND - after Story 8 Nix environment)
-**Status**: Not Started
+**Status**: Complete
 
 #### Description
 
@@ -175,8 +175,8 @@ AI agents connect to pytest-mcp server and establish communication through the M
 ```gherkin
 Scenario: AI agent successfully initializes connection
   Given an AI agent with MCP client capability
-  When the agent sends MCP initialize request with protocol version "2024-11-05"
-  Then the server responds with protocol version "2024-11-05"
+  When the agent sends MCP initialize request with protocol version "2025-03-26"
+  Then the server responds with protocol version "2025-03-26"
   And the server includes serverInfo with name "pytest-mcp" and version number
   And the server indicates capabilities for tools and resources
 
@@ -184,8 +184,10 @@ Scenario: AI agent requests unsupported protocol version
   Given an AI agent sending initialize request
   When the agent specifies protocol version "2020-01-01"
   Then the server responds with JSON-RPC error code -32600
-  And the error data includes supported protocol version "2024-11-05"
-  And the error message indicates protocol version incompatibility
+  And the error.data includes field "protocolVersion"
+  And the error.data includes received_value "2020-01-01"
+  And the error.data includes supported_version "2025-03-26"
+  And the error.data.detail explains "Protocol version not supported. Please retry initialization with supported version."
 ```
 
 #### References
@@ -602,7 +604,7 @@ uvx support requires proper package entry points and standard Python packaging. 
 
 **Epic**: Infrastructure
 **Priority**: P0
-**Status**: Not Started
+**Status**: Complete
 
 #### Description
 
@@ -655,7 +657,7 @@ Nix flake should pin all dependencies for reproducibility. Development tools sho
 
 **Epic**: Infrastructure
 **Priority**: P0
-**Status**: Not Started
+**Status**: Complete
 
 #### Description
 
