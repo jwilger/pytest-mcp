@@ -5,7 +5,10 @@ the Parse Don't Validate philosophy. Types make illegal states unrepresentable
 at the domain boundary.
 """
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 
 class ProtocolError(BaseModel):
@@ -95,8 +98,156 @@ class ServerCapabilities(BaseModel):
     model_config = {"frozen": True}
 
 
-# Workflow function signatures (Story 1 scope only)
+# Story 2: MCP Tool Discovery Domain Types
+
+
+class Tool(BaseModel):
+    """MCP tool definition with name, description, and JSON Schema.
+
+    Represents a discoverable MCP tool with its parameter schema.
+    Parse Don't Validate: Only valid tool definitions can be constructed.
+
+    Follows STYLE_GUIDE.md tool discovery pattern.
+    """
+
+    name: str = Field(description="Tool name identifier")
+    description: str = Field(description="Tool purpose description")
+    inputSchema: dict[str, Any] = Field(  # noqa: N815 (MCP spec requires camelCase)
+        description="JSON Schema for parameters"
+    )
+
+    model_config = {"frozen": True}
+
+
+class ExecuteTestsParams(BaseModel):
+    """Parameters for execute_tests MCP tool.
+
+    Validates pytest execution parameters with security constraints.
+    Parse Don't Validate: Only valid parameter combinations can be constructed.
+
+    Follows STYLE_GUIDE.md tool specification (lines 364-417).
+    """
+
+    node_ids: list[str] | None = Field(
+        default=None,
+        description="Specific test node IDs to execute (e.g., 'tests/test_user.py::test_login')",
+    )
+    markers: str | None = Field(
+        default=None,
+        description="Pytest marker expression for filtering (e.g., 'not slow and integration')",
+    )
+    keywords: str | None = Field(
+        default=None,
+        description="Keyword expression for test name matching (e.g., 'test_user')",
+    )
+    verbosity: int | None = Field(
+        default=None,
+        description="Output verbosity level: -2 (quietest) to 2 (most verbose)",
+        ge=-2,
+        le=2,
+    )
+    failfast: bool | None = Field(
+        default=None,
+        description="Stop execution on first failure",
+    )
+    maxfail: int | None = Field(
+        default=None,
+        description="Stop execution after N failures",
+        ge=1,
+    )
+    show_capture: bool | None = Field(
+        default=None,
+        description="Include captured stdout/stderr in test output",
+    )
+    timeout: int | None = Field(
+        default=None,
+        description="Execution timeout in seconds",
+        ge=1,
+    )
+
+    @model_validator(mode="after")
+    def validate_failfast_maxfail_exclusive(self) -> "ExecuteTestsParams":
+        """Validate that failfast and maxfail are mutually exclusive.
+
+        Raises:
+            ValueError: When both failfast and maxfail are specified
+        """
+        if self.failfast is not None and self.maxfail is not None:
+            raise ValueError(
+                "Parameters 'failfast' and 'maxfail' are mutually exclusive. "
+                "Specify only one to control test execution stopping behavior."
+            )
+        return self
+
+    model_config = {"frozen": True, "extra": "forbid"}
+
+
+class DiscoverTestsParams(BaseModel):
+    """Parameters for discover_tests MCP tool.
+
+    Validates test discovery parameters with path traversal protection.
+    Parse Don't Validate: Only safe path specifications can be constructed.
+
+    Follows STYLE_GUIDE.md tool specification (lines 442-485).
+    """
+
+    path: str | None = Field(
+        default=None,
+        description="Directory or file path to discover tests within (default: project root)",
+    )
+    pattern: str | None = Field(
+        default=None,
+        description="Test file pattern (default: 'test_*.py' or '*_test.py')",
+    )
+
+    @field_validator("path")
+    @classmethod
+    def validate_no_path_traversal(cls, v: str | None) -> str | None:
+        """Validate path does not contain directory traversal sequences.
+
+        Security constraint: Prevent path traversal attacks via '..' sequences.
+
+        Raises:
+            ValueError: When path contains '..' directory traversal
+        """
+        if v is None:
+            return v
+
+        # Check for directory traversal attempts
+        if ".." in Path(v).parts:
+            raise ValueError(
+                f"Path traversal not allowed: '{v}' contains '..' sequences. "
+                "Specify paths within the project boundary only."
+            )
+        return v
+
+    model_config = {"frozen": True, "extra": "forbid"}
+
+
+# Workflow function signatures
 # Implementation deferred to TDD phase (N.7)
+
+
+def list_tools() -> list[Tool]:
+    """List all available MCP tools with their parameter schemas.
+
+    Returns tool definitions for pytest execution and discovery capabilities.
+
+    Returns:
+        List of Tool definitions with names, descriptions, and JSON schemas
+    """
+    return [
+        Tool(
+            name="execute_tests",
+            description="Execute pytest tests with filtering and output options",
+            inputSchema=ExecuteTestsParams.model_json_schema(),
+        ),
+        Tool(
+            name="discover_tests",
+            description="Discover available tests in the project",
+            inputSchema=DiscoverTestsParams.model_json_schema(),
+        ),
+    ]
 
 
 def initialize_server(
