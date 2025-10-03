@@ -88,4 +88,7 @@ def initialize_server(protocol_version: str) -> tuple[ProtocolVersion, ServerInf
     Raises:
         ValueError: When protocol version is unsupported (includes ProtocolError details)
     """
-    raise NotImplementedError("TDD implementation pending")
+    validated_version = ProtocolVersion(value=protocol_version)
+    server_info = ServerInfo(name="pytest-mcp", version="0.1.0")
+    capabilities = ServerCapabilities(tools=True, resources=True)
+    return (validated_version, server_info, capabilities)
