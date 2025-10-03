@@ -346,7 +346,11 @@ class TestResult(BaseModel):
         description="pytest node identifier (e.g., 'tests/test_user.py::test_login')"
     )
     outcome: str = Field(description="Test outcome: 'passed', 'failed', 'skipped', or 'error'")
-    duration: float = Field(description="Test execution time in seconds", ge=0.0)
+    duration: float | None = Field(
+        default=None,
+        description="Test execution time in seconds (None when only summary available)",
+        ge=0.0,
+    )
     message: str | None = Field(
         default=None, description="Error message for failed/error tests (null for passed/skipped)"
     )
@@ -669,11 +673,11 @@ def discover_tests(
 
 def execute_tests(
     params: ExecuteTestsParams,
-) -> ExecuteTestsResponse:
+) -> ExecuteTestsResponse | ExecutionError:
     """Execute pytest tests with given parameters.
 
     Parse Don't Validate: Accepts validated ExecuteTestsParams, returns
-    validated ExecuteTestsResponse with test results.
+    validated ExecuteTestsResponse with test results or ExecutionError.
 
     Args:
         params: Validated test execution parameters
@@ -681,16 +685,89 @@ def execute_tests(
     Returns:
         ExecuteTestsResponse with test results and summary
     """
+    import re
+
     # Build pytest command targeting fixture tests (avoid infinite recursion)
     cmd = ["pytest", "tests/fixtures/sample_tests/", "-v"]
 
-    # Execute pytest
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    # Execute pytest with timeout and exception handling
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,  # Prevent hangs
+        )
+    except subprocess.TimeoutExpired as e:
+        # Return ExecutionError for timeout
+        return ExecutionError(
+            exit_code=-1,
+            stdout=e.stdout.decode() if isinstance(e.stdout, bytes) else (e.stdout or ""),
+            stderr=e.stderr.decode() if isinstance(e.stderr, bytes) else (e.stderr or ""),
+            timeout_exceeded=True,
+            command=cmd,
+            duration=30.0,
+        )
+    except FileNotFoundError:
+        # Return ExecutionError when pytest not found
+        return ExecutionError(
+            exit_code=-1,
+            stdout="",
+            stderr="pytest command not found",
+            timeout_exceeded=False,
+            command=cmd,
+            duration=0.0,
+        )
+
+    # Parse summary line for test counts and duration
+    # Example: "====== 2 passed in 0.01s ======="
+    # NOTE: Primitive string parsing is intentional for Round 2 (minimal implementation)
+    # Future rounds will strengthen with JSON output (--json-report) or structured parsing
+    passed_count = 0
+    duration = 0.0
+
+    summary_match = re.search(r"(\d+) passed in ([\d.]+)s", result.stdout)
+    if summary_match:
+        passed_count = int(summary_match.group(1))
+        duration = float(summary_match.group(2))
+
+    # Check for execution errors (exit codes 2-4)
+    if result.returncode in {2, 3, 4}:
+        return ExecutionError(
+            exit_code=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            timeout_exceeded=False,
+            command=cmd,
+            duration=duration,
+        )
+
+    # Parse individual test results from verbose output
+    # Example line: "tests/fixtures/sample_tests/test_sample.py::test_passing PASSED"
+    tests = []
+    for line in result.stdout.split("\n"):
+        if "::test_" in line and "PASSED" in line:
+            # Extract node_id (everything before " PASSED")
+            node_id = line.split(" PASSED")[0].strip()
+            tests.append(
+                TestResult(
+                    node_id=node_id,
+                    outcome="passed",
+                    duration=None,  # Individual durations not available in Round 2
+                )
+            )
 
     # Return minimal valid response
     return ExecuteTestsResponse(
         exit_code=result.returncode,
-        summary=ExecutionSummary(total=0, passed=0, failed=0, skipped=0, errors=0, duration=0.0),
-        tests=[],
+        summary=ExecutionSummary(
+            total=passed_count,
+            passed=passed_count,
+            failed=0,
+            skipped=0,
+            errors=0,
+            duration=duration,
+        ),
+        tests=tests,
         text_output=result.stdout,
     )

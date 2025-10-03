@@ -32,3 +32,37 @@ def test_execute_tests_with_no_parameters_returns_execution_response() -> None:
     assert isinstance(result, ExecuteTestsResponse), (
         "execute_tests should return an ExecuteTestsResponse object"
     )
+
+
+def test_execute_tests_summary_total_reflects_actual_test_count() -> None:
+    """Verify summary.total matches actual number of tests executed.
+
+    Acceptance Criteria (Story 4, Scenario 1):
+      Given a project with passing pytest tests
+      When the agent calls execute_tests with no parameters
+      Then summary shows all tests passed with total count
+
+    TDD Round 2: Verify summary contains accurate test count from pytest output.
+    The fixture directory tests/fixtures/sample_tests/ contains exactly 2 tests:
+      - test_passing
+      - test_another_passing
+
+    Single assertion: summary.total should equal 2 (the actual test count).
+
+    Expected to FAIL: Current implementation hardcodes summary.total = 0.
+    Need to parse pytest output to extract actual test count.
+    """
+    # Arrange: Create parameters for executing all tests
+    params = ExecuteTestsParams()
+
+    # Act: Execute tests
+    result = execute_tests(params)
+
+    # Assert: Result is success response (not error)
+    assert isinstance(result, ExecuteTestsResponse)
+
+    # Assert: Summary total should match the 2 fixture tests
+    assert result.summary.total == 2, (
+        f"Expected summary.total to be 2 (matching fixture test count), "
+        f"but got {result.summary.total}"
+    )
