@@ -22,7 +22,7 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
@@ -135,7 +135,7 @@ jobs:
 
       - name: Run mutation testing
         run: |
-          uv run mutmut run --paths-to-mutate=src/
+          uv run mutmut run
           MUTATION_SCORE=$(uv run mutmut junitxml | grep -oP 'tests="\K[0-9]+' | head -1)
           KILLED=$(uv run mutmut junitxml | grep -oP 'failures="\K[0-9]+' | head -1)
           if [ -n "$MUTATION_SCORE" ] && [ -n "$KILLED" ]; then

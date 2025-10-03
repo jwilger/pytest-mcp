@@ -3,7 +3,7 @@
 
 def main() -> None:
     """Print Hello, world to stdout."""
-    print("Hello, world")
+    print("Hello, world")  # noqa: T201
 
 
 if __name__ == "__main__":
