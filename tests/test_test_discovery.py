@@ -57,3 +57,32 @@ def test_discover_tests_finds_existing_tests() -> None:
         "discover_tests should find at least one test in the project "
         "(this test file exists in tests/)"
     )
+
+
+def test_discover_tests_filters_by_path() -> None:
+    """Verify discover_tests filters tests by specified path.
+
+    Acceptance Criteria (Story 3, Scenario 2):
+      Given a project with tests in tests/unit/ and tests/integration/
+      When the agent calls discover_tests with path "tests/unit/"
+      Then the server responds with tests only from tests/unit/ directory
+      And tests from tests/integration/ are not included
+      And the count reflects only unit tests
+
+    Adaptation for current structure:
+      Using existing test files, verify that path parameter filters to
+      specific file. When path="tests/test_test_discovery.py", only tests
+      from this file should be discovered.
+
+    Single assertion: All discovered tests should be from the specified path.
+
+    Expected to PASS: Implementation already passes path to pytest command.
+    """
+    # Act: Discover tests from specific file
+    params = DiscoverTestsParams(path="tests/test_test_discovery.py")
+    result = discover_tests(params)
+
+    # Assert: All discovered tests should be from the specified file
+    assert all(
+        test.file == "tests/test_test_discovery.py" for test in result.tests
+    ), "All discovered tests should be from the specified path"
