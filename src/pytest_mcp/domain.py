@@ -5,6 +5,7 @@ the Parse Don't Validate philosophy. Types make illegal states unrepresentable
 at the domain boundary.
 """
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -224,6 +225,111 @@ class DiscoverTestsParams(BaseModel):
     model_config = {"frozen": True, "extra": "forbid"}
 
 
+# Story 3: Test Discovery Response Domain Types
+
+
+class DiscoveredTest(BaseModel):
+    """Individual test item discovered by pytest collection.
+
+    Represents a single test with hierarchical organization (module, class, function)
+    and source location information. Parse Don't Validate: Only valid test items
+    can be constructed.
+
+    Follows STYLE_GUIDE.md successful test discovery pattern (lines 671-720).
+    """
+
+    node_id: str = Field(
+        description=(
+            "pytest node identifier for execution targeting "
+            "(e.g., 'tests/test_user.py::TestUserAuth::test_login')"
+        )
+    )
+    module: str = Field(description="Python module path (e.g., 'tests.test_user')")
+    class_: str | None = Field(
+        default=None,
+        alias="class",
+        description="Test class name (null for function-based tests)",
+    )
+    function: str = Field(description="Test function name")
+    file: str = Field(description="Source file path")
+    line: int | None = Field(
+        default=None,
+        description="Line number in source file (null when not available from pytest output)",
+        ge=1,
+    )
+
+    model_config = {"frozen": True, "populate_by_name": True}
+
+
+class CollectionError(BaseModel):
+    """Collection error encountered during test discovery.
+
+    Structured error object providing actionable diagnostic information for
+    AI agents to autonomously fix collection failures (syntax errors, import
+    failures, etc.). Parse Don't Validate: Only valid error objects can be
+    constructed.
+
+    Follows STYLE_GUIDE.md collection error pattern (lines 721-803).
+    """
+
+    file: str = Field(description="Source file path where collection error occurred")
+    error_type: str = Field(
+        description="Error classification (SyntaxError, ImportError, CollectionError, etc.)"
+    )
+    message: str = Field(description="Human-readable error description")
+    line: int | None = Field(
+        default=None, description="Line number where error occurred (null if not available)"
+    )
+    traceback: str | None = Field(
+        default=None,
+        description="Full traceback text for diagnostic purposes (null if not available)",
+    )
+
+    model_config = {"frozen": True}
+
+
+class DiscoverTestsResponse(BaseModel):
+    """Response structure for test discovery operation.
+
+    Contains discovered tests, total count, and collection errors. Parse Don't
+    Validate: Response succeeds even with collection errors, enabling AI agents
+    to process partial results and autonomously fix issues.
+
+    Follows STYLE_GUIDE.md test discovery response patterns (lines 671-803).
+    """
+
+    tests: list[DiscoveredTest] = Field(
+        description="Array of discovered test items with hierarchical organization"
+    )
+    count: int = Field(
+        description="Total tests discovered (reflects only successfully discovered tests)", ge=0
+    )
+    collection_errors: list[CollectionError] = Field(
+        default_factory=list,
+        description="Collection warnings/errors (empty when discovery succeeds cleanly)",
+    )
+
+    @model_validator(mode="after")
+    def validate_count_matches_tests(self) -> "DiscoverTestsResponse":
+        """Validate that count field matches length of tests array.
+
+        Ensures count accuracy per STYLE_GUIDE.md requirement that count
+        reflects usable tests (excludes files with collection errors).
+
+        Raises:
+            ValueError: When count does not match tests array length
+        """
+        if self.count != len(self.tests):
+            raise ValueError(
+                f"Count mismatch: count field ({self.count}) "
+                f"must match tests array length ({len(self.tests)}). "
+                "Count reflects only successfully discovered tests."
+            )
+        return self
+
+    model_config = {"frozen": True}
+
+
 # Workflow function signatures
 # Implementation deferred to TDD phase (N.7)
 
@@ -288,3 +394,101 @@ def initialize_server(
     server_info = ServerInfo(name="pytest-mcp", version="0.1.0")
     capabilities = ServerCapabilities(tools=True, resources=True)
     return (validated_version, server_info, capabilities)
+
+
+def discover_tests(
+    params: DiscoverTestsParams,
+) -> DiscoverTestsResponse:
+    """Discover available tests in the project without executing them.
+
+    Parse Don't Validate: Accepts validated DiscoverTestsParams with path
+    traversal protection, returns validated DiscoverTestsResponse with
+    discovered tests and optional collection errors.
+
+    Args:
+        params: Validated discovery parameters with security constraints
+
+    Returns:
+        DiscoverTestsResponse with discovered tests, count, and collection errors
+    """
+    # Build pytest command for test discovery
+    # Use -q to get simpler output format
+    cmd = ["pytest", "--collect-only", "-q"]
+    if params.path:
+        cmd.append(params.path)
+    if params.pattern:
+        cmd.extend(["-o", f"python_files={params.pattern}"])
+
+    # Execute pytest subprocess
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+    )
+
+    # Parse pytest output to discover tests
+    # pytest --collect-only -q outputs lines like:
+    # tests/test_file.py::test_function
+    # tests/test_file.py::TestClass::test_method
+    tests: list[DiscoveredTest] = []
+    collection_errors: list[CollectionError] = []
+
+    # Check stderr for collection errors (minimal implementation)
+    if result.stderr.strip():
+        # Create basic CollectionError when stderr contains errors
+        collection_errors.append(
+            CollectionError(
+                file=params.path or ".",
+                error_type="CollectionError",
+                message=result.stderr.strip(),
+            )
+        )
+
+    for line in result.stdout.strip().split("\n"):
+        line = line.strip()
+        # Skip empty lines, separator lines, and summary lines
+        if not line or line.startswith("=") or "collected" in line.lower():
+            continue
+
+        # Look for lines containing "::" which indicate test node IDs
+        if "::" in line:
+            node_id = line
+            parts = node_id.split("::")
+
+            if len(parts) < 2:
+                continue
+
+            file_path = parts[0]
+
+            # Extract module from file path (e.g., "tests/test_user.py" -> "tests.test_user")
+            module = file_path.replace("/", ".").replace(".py", "")
+
+            # Determine if class-based or function-based test
+            if len(parts) == 3:
+                # Class-based test: file.py::TestClass::test_method
+                class_name = parts[1]
+                function_name = parts[2]
+            elif len(parts) == 2:
+                # Function-based test: file.py::test_function
+                class_name = None
+                function_name = parts[1]
+            else:
+                # Skip malformed lines
+                continue
+
+            tests.append(
+                DiscoveredTest.model_construct(
+                    node_id=node_id,
+                    module=module,
+                    class_=class_name,
+                    function=function_name,
+                    file=file_path,
+                    line=None,  # pytest -q doesn't provide line numbers
+                )
+            )
+
+    return DiscoverTestsResponse(
+        tests=tests,
+        count=len(tests),
+        collection_errors=collection_errors,
+    )
