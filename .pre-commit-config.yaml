@@ -5,7 +5,7 @@
 repos:
   # Ruff formatting check (matches: uv run ruff format --check .)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    rev: v0.13.3
     hooks:
       - id: ruff-format
         name: ruff-format (check only)
@@ -13,7 +13,7 @@ repos:
 
   # Ruff linting (matches: uv run ruff check .)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    rev: v0.13.3
     hooks:
       - id: ruff
         name: ruff-check
@@ -26,7 +26,10 @@ repos:
       - id: mypy
         name: mypy (strict mode)
         additional_dependencies: [mcp>=1.16.0, pytest>=8.0.0]
-        args: [.]
+        # Use same args as direct mypy command for consistency
+        args: [--explicit-package-bases, --namespace-packages, .]
+        # Tell mypy to look for packages in src/ directory
+        pass_filenames: false
 
   # Pytest (matches: uv run pytest)
   # Note: Pre-commit runs on Python 3.12 locally, PR runs on both 3.12 and 3.13
