@@ -118,3 +118,39 @@ def test_discover_tests_filters_by_pattern() -> None:
         "discover_tests should find 0 tests when pattern '*_spec.py' doesn't "
         "match any files (we only have test_*.py files)"
     )
+
+
+def test_discover_tests_handles_collection_errors() -> None:
+    """Verify discover_tests populates collection_errors for non-existent paths.
+
+    Acceptance Criteria (Story 3, Scenario 4):
+      Given a project with syntax error in test file
+      When the agent calls discover_tests
+      Then the server responds with partial test list
+      And collection_errors array includes error details
+      And the response does not fail with error code
+
+    Test Strategy:
+      Testing real syntax errors requires creating temporary files, which adds
+      complexity. Instead, we test collection error handling by providing a
+      non-existent path to pytest, which will generate a collection error.
+
+      When path points to non-existent file/directory, pytest stderr will
+      contain collection error information, and we should populate
+      collection_errors array (even if tests array is empty).
+
+    Single assertion: collection_errors should be non-empty when pytest
+    reports collection failures.
+
+    Expected to FAIL: Implementation currently ignores stderr and always
+    returns empty collection_errors list.
+    """
+    # Act: Discover tests with path that doesn't exist (will cause collection error)
+    params = DiscoverTestsParams(path="tests/nonexistent_directory/")
+    result = discover_tests(params)
+
+    # Assert: Should populate collection_errors when pytest reports errors
+    assert len(result.collection_errors) > 0, (
+        "discover_tests should populate collection_errors when pytest "
+        "reports collection failures (non-existent path triggers error)"
+    )

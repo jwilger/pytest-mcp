@@ -433,6 +433,17 @@ def discover_tests(
     tests: list[DiscoveredTest] = []
     collection_errors: list[CollectionError] = []
 
+    # Check stderr for collection errors (minimal implementation)
+    if result.stderr.strip():
+        # Create basic CollectionError when stderr contains errors
+        collection_errors.append(
+            CollectionError(
+                file=params.path or ".",
+                error_type="CollectionError",
+                message=result.stderr.strip(),
+            )
+        )
+
     for line in result.stdout.strip().split("\n"):
         line = line.strip()
         # Skip empty lines, separator lines, and summary lines
