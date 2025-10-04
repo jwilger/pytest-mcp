@@ -1,6 +1,6 @@
 # ADR-012: Console Script Entry Point Configuration
 
-**Status**: proposed
+**Status**: accepted
 
 **Date**: October 3, 2025 (Friday)
 

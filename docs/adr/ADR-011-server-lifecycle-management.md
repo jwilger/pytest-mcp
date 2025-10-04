@@ -1,6 +1,6 @@
 # ADR-011: Server Lifecycle Management Using stdio_server Context Manager
 
-**Status**: proposed
+**Status**: accepted
 
 **Date**: October 3, 2025 (Friday)
 
