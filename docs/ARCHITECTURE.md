@@ -23,20 +23,28 @@ pytest-mcp is a **stateless MCP (Model Context Protocol) server** that provides 
 ```mermaid
 graph TB
     AI[AI Agent<br/>Claude, etc.]
-    MCP[MCP Server<br/>pytest-mcp]
+    SDK[MCP SDK<br/>stdio Transport]
+    Adapter[Async Adapter Layer<br/>main.py]
+    Domain[Domain Workflow Functions<br/>domain.py]
     Validation[Parameter Validation<br/>Pydantic]
     Subprocess[pytest Subprocess<br/>Isolated Execution]
     Results[Result Serialization<br/>JSON + Text]
 
-    AI -->|JSON-RPC Request| MCP
-    MCP -->|Validate Parameters| Validation
-    Validation -->|Valid| Subprocess
-    Validation -->|Invalid| MCP
-    Subprocess -->|Exit Code + Output| Results
-    Results -->|Structured Response| MCP
-    MCP -->|JSON-RPC Response| AI
+    AI -->|JSON-RPC over stdio| SDK
+    SDK -->|Tool Call Dict| Adapter
+    Adapter -->|Pydantic Model| Validation
+    Validation -->|Valid Params| Domain
+    Validation -->|Invalid| Adapter
+    Domain -->|Invoke pytest| Subprocess
+    Subprocess -->|Exit Code + Output| Domain
+    Domain -->|Response Type| Results
+    Results -->|Structured Data| Adapter
+    Adapter -->|Result Dict| SDK
+    SDK -->|JSON-RPC Response| AI
 
-    style MCP fill:#e1f5ff
+    style SDK fill:#e1f5ff
+    style Adapter fill:#fff9c4
+    style Domain fill:#e8f5e9
     style Validation fill:#fff4e1
     style Subprocess fill:#f0f0f0
     style Results fill:#e8f5e9
@@ -46,7 +54,7 @@ graph TB
 
 ## Core Architectural Principles
 
-The architecture synthesizes seven architectural decisions (ADRs 001, 002, 004-008) into a unified system design guided by these foundational principles:
+The architecture synthesizes nine architectural decisions (ADRs 001, 002, 004-009) into a unified system design guided by these foundational principles:
 
 ### 1. Stateless Protocol Adapter Pattern
 
@@ -119,19 +127,81 @@ Test failures are NOT tool failures - they are expected outcomes:
 
 ## Component Architecture
 
-### MCP Protocol Layer
+### MCP SDK Transport Layer
 
-**Responsibility**: Translate between AI agent requests and internal operations
+**Responsibility**: Handle JSON-RPC 2.0 protocol over stdio following MCP specification
 
 **Components**:
-- **Tool Definitions**: `execute_tests`, `discover_tests` with parameter schemas
-- **Capability Discovery**: MCP protocol `initialize` and `tools/list` handlers
-- **Request Routing**: Map MCP tool calls to internal handlers
-- **Response Serialization**: Convert internal results to JSON-RPC responses
+- **MCP SDK Server**: `mcp.server.Server` provides protocol implementation
+- **stdio Transport**: `mcp.server.stdio.stdio_server()` handles stdin/stdout communication
+- **Message Framing**: Newline-delimited JSON-RPC 2.0 message parsing and serialization
+- **Protocol Negotiation**: MCP initialization handshake and capability advertisement
+- **Tool Registration**: Decorator-based tool registration with automatic schema generation
 
-**Integration**: Python MCP SDK provides protocol implementation, JSON-RPC handling, and tool registration framework.
+**Why MCP SDK**: Using the official Anthropic SDK guarantees protocol compliance with all MCP clients, handles protocol evolution automatically via dependency updates, and eliminates need to reimplement JSON-RPC 2.0 framing and MCP-specific conventions.
 
-**ADR References**: ADR-001 (MCP Protocol Selection)
+**ADR References**: ADR-009 (MCP SDK Integration), ADR-001 (MCP Protocol Selection)
+
+### Async Adapter Layer
+
+**Responsibility**: Bridge between async MCP SDK and synchronous domain workflow functions using decorator-based tool routing with managed server lifecycle
+
+**Architecture Pattern**: Module-scope server initialization with decorator-based tool registration, executed via async context manager lifecycle
+
+**Components**:
+- **Server Instance**: Module-level `Server("pytest-mcp")` created at import time
+- **Tool Adapters**: Async functions decorated with `@server.call_tool()` for each MCP tool
+- **Tool Routing**: Automatic name-based routing (function name matches tool name exactly)
+- **Lifecycle Management**: `stdio_server()` async context manager handles stdio transport setup and cleanup
+- **Parameter Transformation**: Convert MCP dict arguments → Pydantic domain parameter types
+- **Response Transformation**: Convert domain response types → MCP dict results
+- **Error Translation**: Map Pydantic ValidationError → JSON-RPC error responses
+
+**Implementation Location**: `src/pytest_mcp/main.py`
+
+**Server Lifecycle Orchestration**: The architecture separates three lifecycle concerns (ADR-011):
+1. **Declaration (Module Scope)**: Server instance and decorated tool adapters defined at import time
+2. **Initialization (Context Manager Entry)**: `stdio_server()` sets up stdin/stdout streams with proper buffering
+3. **Execution (Event Loop)**: `server.run(read_stream, write_stream)` processes requests until stdin closes
+4. **Cleanup (Context Manager Exit)**: Automatic stream cleanup even on errors
+
+**Tool Registration Pattern**: The SDK's decorator pattern provides declarative tool registration with zero routing code:
+- Each tool adapter decorated with `@server.call_tool()`
+- Function names match MCP tool names exactly (`execute_tests`, `discover_tests`)
+- SDK automatically routes requests by name lookup—no manual routing tables
+- Adding new tools requires only creating new decorated functions
+
+**Adapter Transformation Flow**:
+```
+MCP Request Dict → Pydantic Validation → Domain Function Call → Domain Response → MCP Response Dict
+```
+
+Each adapter follows a consistent three-step pattern:
+1. **Parse and Validate**: `model_validate()` transforms MCP dict → Pydantic domain type
+2. **Invoke Domain**: Call synchronous domain workflow function with validated parameters
+3. **Transform Response**: `model_dump()` transforms domain type → MCP dict
+
+**Entry Point Structure**: Async `main()` function uses `stdio_server()` context manager pattern:
+- Context manager handles all stdio stream configuration automatically
+- `server.run()` executes within context to process MCP requests
+- Clean shutdown guaranteed by context manager even on errors
+- Console script entry point (`pytest-mcp` command) bridges sync → async with `asyncio.run(main())`
+
+**Console Script Configuration** (ADR-012): Package installation provides `pytest-mcp` command:
+- pyproject.toml [project.scripts]: `pytest-mcp = pytest_mcp.main:cli_main`
+- Synchronous `cli_main()` wrapper function calls `asyncio.run(main())`
+- Simple command invocation for users and MCP client configuration
+- Standard Python packaging convention for console scripts
+
+**Why Context Manager Lifecycle**: SDK's `stdio_server()` pattern guarantees proper resource management (stream setup, buffering configuration, cleanup) without manual stdio handling. Alternative manual stream management would reimplement SDK functionality without benefit (ADR-011).
+
+**Why Decorator-Based Routing**: SDK's decorator pattern eliminates routing logic entirely—tool name matches function name, SDK handles dispatch. Alternative approaches (routing tables, switch statements, class-based handlers) add indirection without architectural benefit (ADR-010).
+
+**Why Async/Sync Bridge**: Domain workflow functions remain synchronous for testability and simplicity. MCP SDK requires async entry points. Adapter layer provides clean separation with minimal overhead (ADR-009).
+
+**Domain Purity Preservation**: Workflow functions in `domain.py` remain unchanged—no MCP SDK coupling, no async/await complexity. All transport concerns isolated to adapter layer in `main.py`.
+
+**ADR References**: ADR-012 (Console Script Entry Point), ADR-011 (Server Lifecycle Management), ADR-010 (Tool Routing Architecture), ADR-009 (MCP SDK Integration), ADR-002 (Stateless Architecture)
 
 ### Parameter Validation Layer
 
@@ -298,27 +368,35 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant AI as AI Agent
-    participant MCP as MCP Server
+    participant SDK as MCP SDK
+    participant Adapter as Async Adapter
     participant Val as Validation
-    participant Exec as Execution
-    participant Ser as Serialization
+    participant Domain as Domain Function
+    participant Exec as pytest Subprocess
 
-    AI->>MCP: JSON-RPC Request (execute_tests)
-    MCP->>Val: Validate parameters
+    AI->>SDK: JSON-RPC Request (execute_tests)
+    SDK->>Adapter: Tool call dict
+    Adapter->>Val: Parse Pydantic model
     alt Validation Fails
-        Val-->>MCP: ValidationError
-        MCP-->>AI: JSON-RPC Error (-32602)
+        Val-->>Adapter: ValidationError
+        Adapter-->>SDK: Error dict
+        SDK-->>AI: JSON-RPC Error (-32602)
     else Validation Succeeds
-        Val-->>MCP: Validated params
-        MCP->>Exec: Execute pytest subprocess
+        Val-->>Adapter: ExecuteTestsParams
+        Adapter->>Domain: execute_tests(params)
+        Domain->>Exec: subprocess.run([pytest, ...])
         alt Execution Succeeds
-            Exec-->>MCP: exit_code, stdout, stderr
-            MCP->>Ser: Serialize results
-            Ser-->>MCP: Structured response
-            MCP-->>AI: JSON-RPC Success
+            Exec-->>Domain: exit_code, stdout, stderr
+            Domain->>Domain: Parse results
+            Domain-->>Adapter: ExecuteTestsResponse
+            Adapter->>Adapter: response.model_dump()
+            Adapter-->>SDK: Result dict
+            SDK-->>AI: JSON-RPC Success
         else Execution Fails
-            Exec-->>MCP: Error (timeout/crash/interrupt)
-            MCP-->>AI: JSON-RPC Error (-32000)
+            Exec-->>Domain: Error (timeout/crash)
+            Domain-->>Adapter: ProtocolError
+            Adapter-->>SDK: Error dict
+            SDK-->>AI: JSON-RPC Error (-32000)
         end
     end
 ```
@@ -331,18 +409,36 @@ sequenceDiagram
 
 ### MCP Protocol Integration
 
-**What**: JSON-RPC 2.0 protocol for AI-to-tool communication
+**What**: JSON-RPC 2.0 protocol for AI-to-tool communication following Model Context Protocol specification
 
-**How**: Python MCP SDK provides protocol implementation
+**How**: MCP Python SDK (`mcp>=1.16.0`) provides reference implementation
+
+**SDK Components Used**:
+- `mcp.server.Server`: Main server class with tool registration
+- `mcp.server.stdio.stdio_server()`: stdio transport initialization
+- `@server.call_tool()`: Decorator for tool handler registration
+- Automatic JSON schema generation from Python type hints
+
+**Integration Architecture**:
+```
+AI Agent (MCP Client)
+    ↕ JSON-RPC 2.0 over stdio
+MCP SDK (mcp.server)
+    ↕ Tool call dicts
+Async Adapter Layer (main.py)
+    ↕ Pydantic domain types
+Domain Workflow Functions (domain.py)
+```
 
 **Constraints**:
 - Must follow MCP specification for tool definitions and parameter schemas
 - Response formats must serialize to JSON
 - Cannot support non-MCP AI assistants without alternative interface
+- Async/await required for server entry point (SDK requirement)
 
-**Coupling**: Tight coupling to MCP protocol (by design). Alternative: Would require REST API or CLI tool for non-MCP clients.
+**Coupling**: Tight coupling to MCP SDK for transport (by design). Domain layer remains SDK-independent for testability. Alternative protocols would require new adapter layer but domain logic unchanged.
 
-**ADR References**: ADR-001 (MCP Protocol Selection)
+**ADR References**: ADR-009 (MCP SDK Integration), ADR-001 (MCP Protocol Selection)
 
 ### pytest Integration
 
@@ -480,8 +576,12 @@ All architectural decisions documented in ADRs with explicit rationale:
 | ADR-006 | Result Structuring | Accepted | Hybrid JSON+text format optimized for AI agents |
 | ADR-007 | Error Handling | Accepted | Test failures as data; execution failures as errors |
 | ADR-008 | Security Model | Accepted | Constraint-based interface prevents attack classes by design |
+| ADR-009 | MCP SDK Integration | Accepted | Use official SDK for transport; async adapter layer bridges to domain |
+| ADR-010 | Tool Routing Architecture | Accepted | Decorator-based tool registration with name-based routing; zero routing code |
+| ADR-011 | Server Lifecycle Management | Accepted | stdio_server() context manager for automatic resource management and clean shutdown |
+| ADR-012 | Console Script Entry Point | Accepted | [project.scripts] entry point with sync wrapper calling asyncio.run(main()) |
 
-**Architecture Evolution**: ADR-003 rejection demonstrates architecture evolution - programmatic API initially proposed but rejected when isolation requirements clarified. Subprocess integration (ADR-004) provides superior isolation despite minor performance overhead.
+**Architecture Evolution**: ADR-003 rejection demonstrates architecture evolution - programmatic API initially proposed but rejected when isolation requirements clarified. Subprocess integration (ADR-004) provides superior isolation despite minor performance overhead. ADR-010 refines ADR-009's adapter pattern by specifying decorator-based tool routing as the mechanism for connecting MCP tool names to domain functions. ADR-011 completes the MCP server architecture by establishing the lifecycle orchestration pattern using SDK's context manager for automatic stdio stream management. ADR-012 finalizes the user-facing interface by establishing the console script entry point configuration, completing the MCP server integration from internal architecture to external invocation.
 
 ## Deployment Considerations
 
@@ -494,7 +594,9 @@ All architectural decisions documented in ADRs with explicit rationale:
 ### Production Deployment
 
 **Distribution**: PyPI package installable via `pip` or executable via `uvx pytest-mcp`
-**Execution**: MCP client spawns server process; server spawns pytest subprocesses
+**Console Script**: `pytest-mcp` command available after installation (ADR-012)
+**Execution**: MCP client spawns `pytest-mcp` command; server spawns pytest subprocesses
+**User Invocation**: Direct command-line execution or MCP client configuration
 **Scaling**: Stateless design enables horizontal scaling (multiple server instances)
 **Monitoring**: Future: Push-based telemetry to external monitoring (preserves stateless design)
 
@@ -516,4 +618,4 @@ All architectural decisions documented in ADRs with explicit rationale:
 
 ---
 
-**Architecture Summary**: pytest-mcp synthesizes seven architectural decisions into a cohesive stateless MCP server design. The architecture achieves security through constraint-based interface design, reliability through process isolation, and AI agent effectiveness through structured result formatting. All quality attributes (consistency, security, performance, reliability, compatibility) are directly supported by architectural decisions with clear traceability to source ADRs.
+**Architecture Summary**: pytest-mcp synthesizes twelve architectural decisions into a cohesive stateless MCP server design. The architecture achieves protocol compliance through official MCP SDK integration, security through constraint-based interface design, reliability through process isolation, and AI agent effectiveness through structured result formatting. The async adapter layer provides clean separation between transport concerns (MCP SDK) and domain logic (workflow functions), using decorator-based tool routing with automatic name-based dispatch to eliminate manual routing code. Server lifecycle orchestration uses SDK's stdio_server() context manager pattern for automatic resource management and graceful shutdown. Console script entry point configuration provides simple `pytest-mcp` command invocation using standard Python packaging conventions with a synchronous wrapper bridging to the async server lifecycle. All quality attributes (consistency, security, performance, reliability, compatibility) are directly supported by architectural decisions with clear traceability to source ADRs.
