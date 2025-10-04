@@ -73,3 +73,42 @@ def test_main_uses_stdio_server_lifecycle(
     assert call_args[1] == mock_write_stream
     # Third arg is InitializationOptions - just verify it's not None
     assert call_args[2] is not None
+
+
+@patch("pytest_mcp.main.domain.execute_tests")
+def test_execute_tests_tool_handler_exists(
+    mock_domain_execute: MagicMock,
+) -> None:
+    """Verify execute_tests tool handler follows ADR-010 pattern.
+
+    The handler must:
+    1. Accept MCP arguments dict
+    2. Validate using ExecuteTestsParams
+    3. Call domain.execute_tests() with validated params
+    4. Return response.model_dump()
+    """
+    import asyncio
+
+    from pytest_mcp.domain import ExecuteTestsParams, ExecuteTestsResponse, ExecutionSummary
+    from pytest_mcp.main import execute_tests
+
+    # Mock domain function to return test response
+    mock_response = ExecuteTestsResponse(
+        exit_code=0,
+        summary=ExecutionSummary(total=0, passed=0, failed=0, errors=0, skipped=0, duration=0.0),
+        tests=[],
+        text_output="",
+    )
+    mock_domain_execute.return_value = mock_response
+
+    # Call the tool handler with MCP arguments
+    test_args = {"node_ids": None}
+    result = asyncio.run(execute_tests(test_args))
+
+    # Verify domain function called with validated params
+    assert mock_domain_execute.called
+    called_params = mock_domain_execute.call_args[0][0]
+    assert isinstance(called_params, ExecuteTestsParams)
+
+    # Verify result is dict (model_dump() called)
+    assert isinstance(result, dict)

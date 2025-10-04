@@ -5,12 +5,14 @@ Domain types and workflow functions are defined in the domain module.
 """
 
 import asyncio
+from typing import Any
 
 from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 
 from pytest_mcp import domain  # noqa: F401 - imported for type availability
+from pytest_mcp.domain import ExecuteTestsParams
 
 # Module scope: Server instance per ADR-011
 server = Server("pytest-mcp")
@@ -36,6 +38,24 @@ async def main() -> None:
                 ),
             ),
         )
+
+
+@server.call_tool()  # type: ignore[misc]
+async def execute_tests(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Execute pytest tests following ADR-010 pattern.
+
+    Step 1: Parse and validate MCP arguments
+    Step 2: Invoke domain workflow function (sync)
+    Step 3: Transform domain response to MCP dict
+    """
+    # Step 1: Parse and validate MCP arguments
+    params = ExecuteTestsParams.model_validate(arguments)
+
+    # Step 2: Invoke domain workflow function (sync)
+    response = domain.execute_tests(params)
+
+    # Step 3: Transform domain response to MCP dict
+    return response.model_dump()
 
 
 if __name__ == "__main__":
