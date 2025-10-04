@@ -39,6 +39,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+norecursedirs = ["fixtures"]
 
 [tool.mypy]
 python_version = "3.12"

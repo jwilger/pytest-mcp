@@ -5,6 +5,7 @@ the Parse Don't Validate philosophy. Types make illegal states unrepresentable
 at the domain boundary.
 """
 
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -330,6 +331,183 @@ class DiscoverTestsResponse(BaseModel):
     model_config = {"frozen": True}
 
 
+# Story 4: Test Execution Response Domain Types
+
+
+class TestResult(BaseModel):
+    """Individual test result from pytest execution.
+
+    Represents a single test outcome with timing and diagnostic information.
+    Parse Don't Validate: Only valid test outcomes can be constructed.
+
+    Follows STYLE_GUIDE.md successful test execution pattern (lines 518-530).
+    """
+
+    node_id: str = Field(
+        description="pytest node identifier (e.g., 'tests/test_user.py::test_login')"
+    )
+    outcome: str = Field(description="Test outcome: 'passed', 'failed', 'skipped', or 'error'")
+    duration: float | None = Field(
+        default=None,
+        description="Test execution time in seconds (None when only summary available)",
+        ge=0.0,
+    )
+    message: str | None = Field(
+        default=None, description="Error message for failed/error tests (null for passed/skipped)"
+    )
+    traceback: str | None = Field(
+        default=None, description="Full traceback for failed/error tests (null for passed/skipped)"
+    )
+
+    @field_validator("outcome")
+    @classmethod
+    def validate_outcome(cls, v: str) -> str:
+        """Validate test outcome is one of the allowed values.
+
+        Raises:
+            ValueError: When outcome is not a valid pytest outcome
+        """
+        valid_outcomes = {"passed", "failed", "skipped", "error"}
+        if v not in valid_outcomes:
+            raise ValueError(
+                f"Invalid test outcome: '{v}'. Must be one of: {', '.join(sorted(valid_outcomes))}"
+            )
+        return v
+
+    model_config = {"frozen": True}
+
+
+class ExecutionSummary(BaseModel):
+    """Aggregated test execution statistics.
+
+    Provides summary counts and total duration for test run analysis.
+    Parse Don't Validate: Only valid summary statistics can be constructed.
+
+    Follows STYLE_GUIDE.md summary structure (lines 510-516).
+    """
+
+    total: int = Field(description="Total number of tests executed", ge=0)
+    passed: int = Field(description="Number of tests that passed", ge=0)
+    failed: int = Field(description="Number of tests that failed", ge=0)
+    skipped: int = Field(description="Number of tests skipped", ge=0)
+    errors: int = Field(description="Number of tests with errors", ge=0)
+    duration: float = Field(description="Total execution time in seconds", ge=0.0)
+
+    @model_validator(mode="after")
+    def validate_totals(self) -> "ExecutionSummary":
+        """Validate that component counts sum to total.
+
+        Raises:
+            ValueError: When passed + failed + skipped + errors != total
+        """
+        sum_components = self.passed + self.failed + self.skipped + self.errors
+        if sum_components != self.total:
+            raise ValueError(
+                f"Summary count mismatch: total ({self.total}) must equal "
+                f"passed ({self.passed}) + failed ({self.failed}) + "
+                f"skipped ({self.skipped}) + errors ({self.errors}) = {sum_components}"
+            )
+        return self
+
+    model_config = {"frozen": True}
+
+
+class ExecuteTestsResponse(BaseModel):
+    """Response structure for test execution operation.
+
+    Contains execution results, summary statistics, and output. Parse Don't
+    Validate: Response structure validated at construction time.
+
+    Follows STYLE_GUIDE.md test execution response pattern (lines 500-570).
+    """
+
+    exit_code: int = Field(
+        description="pytest exit code: 0 (all passed), 1 (some failed), 5 (no tests collected)"
+    )
+    summary: ExecutionSummary = Field(description="Aggregated test execution statistics")
+    tests: list[TestResult] = Field(description="Individual test results with outcomes")
+    text_output: str = Field(description="pytest's native text output (preserves formatting)")
+
+    @field_validator("exit_code")
+    @classmethod
+    def validate_exit_code(cls, v: int) -> int:
+        """Validate exit code is a success/failure code (not error code).
+
+        Raises:
+            ValueError: When exit code indicates execution error (2, 3, 4)
+        """
+        valid_codes = {0, 1, 5}
+        if v not in valid_codes:
+            raise ValueError(
+                f"Invalid exit code for success response: {v}. "
+                f"Use ExecutionError for exit codes 2, 3, 4, or timeout. "
+                f"Valid success codes: {sorted(valid_codes)}"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def validate_count_matches_tests(self) -> "ExecuteTestsResponse":
+        """Validate that summary.total matches length of tests array.
+
+        Ensures count accuracy per STYLE_GUIDE.md requirement.
+
+        Raises:
+            ValueError: When summary.total does not match tests array length
+        """
+        if self.summary.total != len(self.tests):
+            raise ValueError(
+                f"Count mismatch: summary.total ({self.summary.total}) "
+                f"must match tests array length ({len(self.tests)})"
+            )
+        return self
+
+    model_config = {"frozen": True}
+
+
+class ExecutionError(BaseModel):
+    """Error details for failed test execution (exit codes 2-4 or timeout).
+
+    Provides diagnostic information for execution failures that prevent
+    pytest from completing normally. Parse Don't Validate: Only valid
+    execution errors can be constructed.
+
+    Follows STYLE_GUIDE.md execution failure pattern (lines 572-627).
+    """
+
+    exit_code: int = Field(
+        description=(
+            "pytest exit code: 2 (interrupted), 3 (internal error), "
+            "4 (usage error), or -1 (timeout)"
+        )
+    )
+    stdout: str = Field(description="Captured standard output")
+    stderr: str = Field(description="Captured standard error (contains diagnostic info)")
+    timeout_exceeded: bool = Field(description="Whether timeout caused the failure")
+    command: list[str] = Field(
+        description="Exact command executed (for reproduction)", min_length=1
+    )
+    duration: float = Field(description="Time spent before failure in seconds", ge=0.0)
+
+    @field_validator("exit_code")
+    @classmethod
+    def validate_exit_code(cls, v: int) -> int:
+        """Validate exit code is an error code (not success code).
+
+        Raises:
+            ValueError: When exit code indicates success (0, 1, 5)
+        """
+        error_codes = {-1, 2, 3, 4}
+        if v not in error_codes:
+            raise ValueError(
+                f"Invalid exit code for error response: {v}. "
+                f"Use ExecuteTestsResponse for exit codes 0, 1, 5. "
+                f"Valid error codes: {sorted(error_codes)}"
+            )
+        return v
+
+    model_config = {"frozen": True}
+
+
 # Workflow function signatures
 # Implementation deferred to TDD phase (N.7)
 
@@ -491,4 +669,134 @@ def discover_tests(
         tests=tests,
         count=len(tests),
         collection_errors=collection_errors,
+    )
+
+
+def execute_tests(
+    params: ExecuteTestsParams,
+) -> ExecuteTestsResponse | ExecutionError:
+    """Execute pytest tests with given parameters.
+
+    Parse Don't Validate: Accepts validated ExecuteTestsParams, returns
+    validated ExecuteTestsResponse with test results or ExecutionError.
+
+    Args:
+        params: Validated test execution parameters
+
+    Returns:
+        ExecuteTestsResponse with test results and summary
+    """
+    # Build pytest command with node_ids (required parameter)
+    if params.node_ids:
+        cmd = ["pytest", *params.node_ids, "-v"]
+    else:
+        # When no node_ids specified, pytest will use its default discovery
+        cmd = ["pytest", "-v"]
+
+    # Execute pytest with timeout and exception handling
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,  # Prevent hangs
+        )
+    except subprocess.TimeoutExpired as e:
+        # Return ExecutionError for timeout
+        # stdout/stderr are str|bytes|None when text=True; ensure str type
+        stdout_str = e.stdout if isinstance(e.stdout, str) else ""
+        stderr_str = e.stderr if isinstance(e.stderr, str) else ""
+        return ExecutionError(
+            exit_code=-1,
+            stdout=stdout_str,
+            stderr=stderr_str,
+            timeout_exceeded=True,
+            command=cmd,
+            duration=30.0,
+        )
+    except FileNotFoundError:
+        # Return ExecutionError when pytest not found
+        return ExecutionError(
+            exit_code=-1,
+            stdout="",
+            stderr="pytest command not found",
+            timeout_exceeded=False,
+            command=cmd,
+            duration=0.0,
+        )
+
+    # Parse summary line for test counts and duration
+    # Example: "====== 2 passed in 0.01s ======="
+    # Example: "====== 1 failed in 0.02s ======="
+    # NOTE: Primitive string parsing is intentional for Round 2 (minimal implementation)
+    # Future rounds will strengthen with JSON output (--json-report) or structured parsing
+    passed_count = 0
+    failed_count = 0
+    duration = 0.0
+
+    summary_match = re.search(r"(\d+) passed in ([\d.]+)s", result.stdout)
+    if summary_match:
+        passed_count = int(summary_match.group(1))
+        duration = float(summary_match.group(2))
+
+    failed_match = re.search(r"(\d+) failed", result.stdout)
+    if failed_match:
+        failed_count = int(failed_match.group(1))
+        # Extract duration from failed summary if passed summary not found
+        if duration == 0.0:
+            failed_duration_match = re.search(r"(\d+) failed in ([\d.]+)s", result.stdout)
+            if failed_duration_match:
+                duration = float(failed_duration_match.group(2))
+
+    # Check for execution errors (exit codes 2-4)
+    if result.returncode in {2, 3, 4}:
+        return ExecutionError(
+            exit_code=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            timeout_exceeded=False,
+            command=cmd,
+            duration=duration,
+        )
+
+    # Parse individual test results from verbose output
+    # Example line: "tests/fixtures/sample_tests/test_sample.py::test_passing PASSED"
+    # Example line: "tests/fixtures/sample_tests/test_sample.py::test_failing FAILED"
+    tests = []
+    for line in result.stdout.split("\n"):
+        if "::test_" in line and " PASSED" in line and not line.startswith("PASSED"):
+            # Extract node_id (everything before " PASSED")
+            node_id = line.split(" PASSED")[0].strip()
+            tests.append(
+                TestResult(
+                    node_id=node_id,
+                    outcome="passed",
+                    duration=None,  # Individual durations not available in Round 2
+                )
+            )
+        elif "::test_" in line and " FAILED" in line and not line.startswith("FAILED"):
+            # Extract node_id (everything before " FAILED")
+            node_id = line.split(" FAILED")[0].strip()
+            tests.append(
+                TestResult(
+                    node_id=node_id,
+                    outcome="failed",
+                    duration=None,
+                    message="Test failed",  # Minimal message for Round 4
+                )
+            )
+
+    # Return minimal valid response
+    return ExecuteTestsResponse(
+        exit_code=result.returncode,
+        summary=ExecutionSummary(
+            total=passed_count + failed_count,
+            passed=passed_count,
+            failed=failed_count,
+            skipped=0,
+            errors=0,
+            duration=duration,
+        ),
+        tests=tests,
+        text_output=result.stdout,
     )
