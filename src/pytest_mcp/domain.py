@@ -5,6 +5,7 @@ the Parse Don't Validate philosophy. Types make illegal states unrepresentable
 at the domain boundary.
 """
 
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -685,8 +686,6 @@ def execute_tests(
     Returns:
         ExecuteTestsResponse with test results and summary
     """
-    import re
-
     # Build pytest command - use node_ids if provided, else default to fixtures
     if params.node_ids:
         cmd = ["pytest", *params.node_ids, "-v"]
@@ -703,10 +702,13 @@ def execute_tests(
         )
     except subprocess.TimeoutExpired as e:
         # Return ExecutionError for timeout
+        # stdout/stderr are str|bytes|None when text=True; ensure str type
+        stdout_str = e.stdout if isinstance(e.stdout, str) else ""
+        stderr_str = e.stderr if isinstance(e.stderr, str) else ""
         return ExecutionError(
             exit_code=-1,
-            stdout=e.stdout.decode() if isinstance(e.stdout, bytes) else (e.stdout or ""),
-            stderr=e.stderr.decode() if isinstance(e.stderr, bytes) else (e.stderr or ""),
+            stdout=stdout_str,
+            stderr=stderr_str,
             timeout_exceeded=True,
             command=cmd,
             duration=30.0,
