@@ -144,28 +144,42 @@ Test failures are NOT tool failures - they are expected outcomes:
 
 ### Async Adapter Layer
 
-**Responsibility**: Bridge between async MCP SDK and synchronous domain workflow functions
+**Responsibility**: Bridge between async MCP SDK and synchronous domain workflow functions using decorator-based tool routing
 
-**Architecture Pattern**: Thin adapter functions that transform between MCP SDK types and domain types
+**Architecture Pattern**: One async adapter function per MCP tool, using SDK's `@server.call_tool()` decorator for automatic registration and name-based routing
 
 **Components**:
 - **Tool Adapters**: Async functions decorated with `@server.call_tool()` for each MCP tool
+- **Tool Routing**: Automatic name-based routing (function name matches tool name exactly)
 - **Parameter Transformation**: Convert MCP dict arguments → Pydantic domain parameter types
 - **Response Transformation**: Convert domain response types → MCP dict results
 - **Error Translation**: Map Pydantic ValidationError → JSON-RPC error responses
 
 **Implementation Location**: `src/pytest_mcp/main.py`
 
-**Adapter Pattern Example**:
+**Tool Registration Pattern**: The SDK's decorator pattern provides declarative tool registration with zero routing code:
+- Each tool adapter decorated with `@server.call_tool()`
+- Function names match MCP tool names exactly (`execute_tests`, `discover_tests`)
+- SDK automatically routes requests by name lookup—no manual routing tables
+- Adding new tools requires only creating new decorated functions
+
+**Adapter Transformation Flow**:
 ```
 MCP Request Dict → Pydantic Validation → Domain Function Call → Domain Response → MCP Response Dict
 ```
 
+Each adapter follows a consistent three-step pattern:
+1. **Parse and Validate**: `model_validate()` transforms MCP dict → Pydantic domain type
+2. **Invoke Domain**: Call synchronous domain workflow function with validated parameters
+3. **Transform Response**: `model_dump()` transforms domain type → MCP dict
+
+**Why Decorator-Based Routing**: SDK's decorator pattern eliminates routing logic entirely—tool name matches function name, SDK handles dispatch. Alternative approaches (routing tables, switch statements, class-based handlers) add indirection without architectural benefit.
+
 **Why Async/Sync Bridge**: Domain workflow functions remain synchronous for testability and simplicity. MCP SDK requires async entry points. Adapter layer provides clean separation with minimal overhead.
 
-**Domain Purity Preservation**: Workflow functions in `domain.py` remain unchanged—no MCP SDK coupling, no async/await complexity. All transport concerns isolated to adapter layer.
+**Domain Purity Preservation**: Workflow functions in `domain.py` remain unchanged—no MCP SDK coupling, no async/await complexity. All transport concerns isolated to adapter layer in `main.py`.
 
-**ADR References**: ADR-009 (MCP SDK Integration), ADR-002 (Stateless Architecture)
+**ADR References**: ADR-010 (Tool Routing Architecture), ADR-009 (MCP SDK Integration), ADR-002 (Stateless Architecture)
 
 ### Parameter Validation Layer
 
@@ -541,8 +555,9 @@ All architectural decisions documented in ADRs with explicit rationale:
 | ADR-007 | Error Handling | Accepted | Test failures as data; execution failures as errors |
 | ADR-008 | Security Model | Accepted | Constraint-based interface prevents attack classes by design |
 | ADR-009 | MCP SDK Integration | Accepted | Use official SDK for transport; async adapter layer bridges to domain |
+| ADR-010 | Tool Routing Architecture | Accepted | Decorator-based tool registration with name-based routing; zero routing code |
 
-**Architecture Evolution**: ADR-003 rejection demonstrates architecture evolution - programmatic API initially proposed but rejected when isolation requirements clarified. Subprocess integration (ADR-004) provides superior isolation despite minor performance overhead.
+**Architecture Evolution**: ADR-003 rejection demonstrates architecture evolution - programmatic API initially proposed but rejected when isolation requirements clarified. Subprocess integration (ADR-004) provides superior isolation despite minor performance overhead. ADR-010 refines ADR-009's adapter pattern by specifying decorator-based tool routing as the mechanism for connecting MCP tool names to domain functions.
 
 ## Deployment Considerations
 
@@ -577,4 +592,4 @@ All architectural decisions documented in ADRs with explicit rationale:
 
 ---
 
-**Architecture Summary**: pytest-mcp synthesizes nine architectural decisions into a cohesive stateless MCP server design. The architecture achieves protocol compliance through official MCP SDK integration, security through constraint-based interface design, reliability through process isolation, and AI agent effectiveness through structured result formatting. The async adapter layer provides clean separation between transport concerns (MCP SDK) and domain logic (workflow functions), maintaining testability while meeting SDK requirements. All quality attributes (consistency, security, performance, reliability, compatibility) are directly supported by architectural decisions with clear traceability to source ADRs.
+**Architecture Summary**: pytest-mcp synthesizes ten architectural decisions into a cohesive stateless MCP server design. The architecture achieves protocol compliance through official MCP SDK integration, security through constraint-based interface design, reliability through process isolation, and AI agent effectiveness through structured result formatting. The async adapter layer provides clean separation between transport concerns (MCP SDK) and domain logic (workflow functions), using decorator-based tool routing with automatic name-based dispatch to eliminate manual routing code. All quality attributes (consistency, security, performance, reliability, compatibility) are directly supported by architectural decisions with clear traceability to source ADRs.
