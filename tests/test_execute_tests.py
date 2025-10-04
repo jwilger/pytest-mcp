@@ -20,9 +20,6 @@ def test_execute_tests_with_no_parameters_returns_execution_response() -> None:
 
     This is the highest-level integration test for the test execution workflow.
     Single assertion: The function should return an ExecuteTestsResponse object.
-
-    Expected to FAIL: execute_tests workflow function does not exist yet.
-    Compiler will demand we create it in domain.py.
     """
     # Act: Call the workflow function we're testing
     params = ExecuteTestsParams()
@@ -49,9 +46,6 @@ def test_execute_tests_summary_total_reflects_actual_test_count() -> None:
       - test_failing (fails)
 
     Single assertion: summary.total should equal 3 (the actual test count).
-
-    Expected to FAIL: Current implementation hardcodes summary.total = 0.
-    Need to parse pytest output to extract actual test count.
     """
     # Arrange: Create parameters for executing all tests
     params = ExecuteTestsParams()
@@ -94,10 +88,6 @@ def test_execute_tests_filters_by_node_ids() -> None:
     When node_ids specifies only test_passing, exactly 1 test should execute.
 
     Single assertion: summary.total should equal 1 (only the specified test).
-
-    Expected to FAIL: Current implementation ignores params.node_ids and always
-    executes all tests in the hardcoded fixture directory. The command at line 691
-    hardcodes the path and doesn't use node_ids for filtering.
     """
     # Arrange: Create parameters targeting only one specific test
     params = ExecuteTestsParams(
@@ -136,10 +126,6 @@ def test_execute_tests_captures_failed_test_details() -> None:
     The fixture test_failing intentionally fails with assertion error.
 
     Single assertion: Failed test should have a non-None message field.
-
-    Expected to FAIL: Current implementation at line 752 only checks for "PASSED" tests,
-    so failed tests won't appear in the tests array. Even if they did, the message field
-    would be None because we don't parse failure details yet.
     """
     # Arrange: Create parameters targeting the specific failing test
     params = ExecuteTestsParams(

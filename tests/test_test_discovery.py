@@ -20,9 +20,6 @@ def test_discover_tests_returns_response_object() -> None:
 
     This is the highest-level integration test for the test discovery workflow.
     Single assertion: The function should return a DiscoverTestsResponse object.
-
-    Expected to FAIL: discover_tests workflow function does not exist yet.
-    Compiler will demand we create it in domain.py.
     """
     # Act: Call the workflow function we're testing
     params = DiscoverTestsParams()
@@ -44,9 +41,6 @@ def test_discover_tests_finds_existing_tests() -> None:
 
     This test itself exists in tests/ so discover_tests should find at least
     the tests in this file. Single assertion: count should be greater than zero.
-
-    Expected to FAIL: Currently discover_tests returns count=0, but real pytest
-    --collect-only should discover at least the tests in this file.
     """
     # Act: Call discover_tests to discover tests in the project
     params = DiscoverTestsParams()
@@ -105,9 +99,6 @@ def test_discover_tests_filters_by_pattern() -> None:
       don't have any files matching that pattern.
 
     Single assertion: count should be 0 when pattern doesn't match any files.
-
-    Expected to FAIL: Implementation doesn't use pattern parameter yet.
-    Currently ignores pattern and discovers all test_*.py files.
     """
     # Act: Discover tests with pattern that doesn't match our test files
     params = DiscoverTestsParams(pattern="*_spec.py")
@@ -141,9 +132,6 @@ def test_discover_tests_handles_collection_errors() -> None:
 
     Single assertion: collection_errors should be non-empty when pytest
     reports collection failures.
-
-    Expected to FAIL: Implementation currently ignores stderr and always
-    returns empty collection_errors list.
     """
     # Act: Discover tests with path that doesn't exist (will cause collection error)
     params = DiscoverTestsParams(path="tests/nonexistent_directory/")

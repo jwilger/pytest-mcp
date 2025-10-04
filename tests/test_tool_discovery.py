@@ -19,9 +19,6 @@ def test_list_tools_returns_array_with_two_tool_definitions() -> None:
 
     This is the highest-level integration test for the tool discovery workflow.
     Single assertion: The function should return a list with exactly 2 tool definitions.
-
-    Expected to FAIL: list_tools workflow function does not exist yet.
-    Compiler will demand we create it in domain.py.
     """
     # Act: Call the workflow function we're testing
     result = list_tools()
