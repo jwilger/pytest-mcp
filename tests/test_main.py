@@ -112,3 +112,53 @@ def test_execute_tests_tool_handler_exists(
 
     # Verify result is dict (model_dump() called)
     assert isinstance(result, dict)
+
+
+@patch("pytest_mcp.main.domain.discover_tests")
+def test_discover_tests_tool_handler_exists(
+    mock_domain_discover: MagicMock,
+) -> None:
+    """Verify discover_tests tool handler follows ADR-010 pattern.
+
+    The handler must:
+    1. Accept MCP arguments dict
+    2. Validate using DiscoverTestsParams
+    3. Call domain.discover_tests() with validated params
+    4. Return response.model_dump()
+    """
+    import asyncio
+
+    from pytest_mcp.domain import (
+        DiscoveredTest,
+        DiscoverTestsParams,
+        DiscoverTestsResponse,
+    )
+    from pytest_mcp.main import discover_tests
+
+    # Mock domain function to return test response
+    mock_response = DiscoverTestsResponse(
+        tests=[
+            DiscoveredTest(
+                node_id="tests/test_sample.py::test_example",
+                module="tests.test_sample",
+                function="test_example",
+                file="tests/test_sample.py",
+                line=None,
+            )
+        ],
+        count=1,
+        collection_errors=[],
+    )
+    mock_domain_discover.return_value = mock_response
+
+    # Call the tool handler with MCP arguments
+    test_args = {"path": None, "pattern": None}
+    result = asyncio.run(discover_tests(test_args))
+
+    # Verify domain function called with validated params
+    assert mock_domain_discover.called
+    called_params = mock_domain_discover.call_args[0][0]
+    assert isinstance(called_params, DiscoverTestsParams)
+
+    # Verify result is dict (model_dump() called)
+    assert isinstance(result, dict)
