@@ -724,15 +724,26 @@ def execute_tests(
 
     # Parse summary line for test counts and duration
     # Example: "====== 2 passed in 0.01s ======="
+    # Example: "====== 1 failed in 0.02s ======="
     # NOTE: Primitive string parsing is intentional for Round 2 (minimal implementation)
     # Future rounds will strengthen with JSON output (--json-report) or structured parsing
     passed_count = 0
+    failed_count = 0
     duration = 0.0
 
     summary_match = re.search(r"(\d+) passed in ([\d.]+)s", result.stdout)
     if summary_match:
         passed_count = int(summary_match.group(1))
         duration = float(summary_match.group(2))
+
+    failed_match = re.search(r"(\d+) failed", result.stdout)
+    if failed_match:
+        failed_count = int(failed_match.group(1))
+        # Extract duration from failed summary if passed summary not found
+        if duration == 0.0:
+            failed_duration_match = re.search(r"(\d+) failed in ([\d.]+)s", result.stdout)
+            if failed_duration_match:
+                duration = float(failed_duration_match.group(2))
 
     # Check for execution errors (exit codes 2-4)
     if result.returncode in {2, 3, 4}:
@@ -747,9 +758,10 @@ def execute_tests(
 
     # Parse individual test results from verbose output
     # Example line: "tests/fixtures/sample_tests/test_sample.py::test_passing PASSED"
+    # Example line: "tests/fixtures/sample_tests/test_sample.py::test_failing FAILED"
     tests = []
     for line in result.stdout.split("\n"):
-        if "::test_" in line and "PASSED" in line:
+        if "::test_" in line and " PASSED" in line and not line.startswith("PASSED"):
             # Extract node_id (everything before " PASSED")
             node_id = line.split(" PASSED")[0].strip()
             tests.append(
@@ -759,14 +771,25 @@ def execute_tests(
                     duration=None,  # Individual durations not available in Round 2
                 )
             )
+        elif "::test_" in line and " FAILED" in line and not line.startswith("FAILED"):
+            # Extract node_id (everything before " FAILED")
+            node_id = line.split(" FAILED")[0].strip()
+            tests.append(
+                TestResult(
+                    node_id=node_id,
+                    outcome="failed",
+                    duration=None,
+                    message="Test failed",  # Minimal message for Round 4
+                )
+            )
 
     # Return minimal valid response
     return ExecuteTestsResponse(
         exit_code=result.returncode,
         summary=ExecutionSummary(
-            total=passed_count,
+            total=passed_count + failed_count,
             passed=passed_count,
-            failed=0,
+            failed=failed_count,
             skipped=0,
             errors=0,
             duration=duration,

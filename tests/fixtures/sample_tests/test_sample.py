@@ -13,3 +13,8 @@ def test_passing() -> None:
 def test_another_passing() -> None:
     """Another simple passing test."""
     assert 1 + 1 == 2
+
+
+def test_failing() -> None:
+    """A test that fails."""
+    raise AssertionError("This test intentionally fails")
