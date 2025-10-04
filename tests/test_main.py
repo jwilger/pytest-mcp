@@ -1,6 +1,8 @@
 """Tests for main module."""
 
 import asyncio
+import tomllib
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from pytest import CaptureFixture
@@ -30,3 +32,13 @@ def test_cli_main_calls_asyncio_run_with_main(mock_asyncio_run: MagicMock) -> No
     cli_main()
 
     assert mock_asyncio_run.called
+
+
+def test_console_script_entry_point_configured() -> None:
+    """Verify pyproject.toml defines pytest-mcp console script per ADR-012."""
+    pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+    with open(pyproject_path, "rb") as f:
+        config = tomllib.load(f)
+
+    scripts = config.get("project", {}).get("scripts", {})
+    assert "pytest-mcp" in scripts
