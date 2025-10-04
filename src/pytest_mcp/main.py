@@ -4,15 +4,17 @@ This module provides the MCP server initialization and main entry point.
 Domain types and workflow functions are defined in the domain module.
 """
 
+import asyncio
+
 from pytest_mcp import domain  # noqa: F401 - imported for type availability
 
 
 def cli_main() -> None:
     """Console script entry point for pytest-mcp server."""
-    pass
+    asyncio.run(main())
 
 
-def main() -> None:
+async def main() -> None:
     """Start the MCP server.
 
     Server initialization workflow implemented in domain.initialize_server.
@@ -22,4 +24,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
