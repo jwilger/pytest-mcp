@@ -858,6 +858,15 @@ Scenario: Server shuts down cleanly when client disconnects
   Then server detects EOF on stdin
   And server completes cleanup via stdio_server context manager
   And server process terminates with exit code 0
+
+Scenario: User configuration documentation guides MCP client setup
+  Given pytest-mcp installed via pip or uvx
+  When user reads configuration documentation in README.md
+  Then documentation provides exact JSON configuration snippet for Claude Code
+  And documentation specifies configuration file location (~/.config/claude/mcp_settings.json)
+  And documentation explains PATH requirements for command discovery
+  And documentation covers both installation methods (pip vs uvx)
+  And user can copy-paste configuration without modification
 ```
 
 #### References
