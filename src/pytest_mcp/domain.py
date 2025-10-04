@@ -686,11 +686,12 @@ def execute_tests(
     Returns:
         ExecuteTestsResponse with test results and summary
     """
-    # Build pytest command - use node_ids if provided, else default to fixtures
+    # Build pytest command with node_ids (required parameter)
     if params.node_ids:
         cmd = ["pytest", *params.node_ids, "-v"]
     else:
-        cmd = ["pytest", "tests/fixtures/sample_tests/", "-v"]
+        # When no node_ids specified, pytest will use its default discovery
+        cmd = ["pytest", "-v"]
 
     # Execute pytest with timeout and exception handling
     try:

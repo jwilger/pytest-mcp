@@ -12,8 +12,8 @@ def test_execute_tests_with_no_parameters_returns_execution_response() -> None:
 
     Acceptance Criteria (Story 4, Scenario 1):
       Given a project with passing pytest tests
-      When the agent calls execute_tests with no parameters
-      Then the server executes pytest for entire suite
+      When the agent calls execute_tests for fixture tests
+      Then the server executes pytest for specified tests
       And the response includes exit_code 0
       And summary shows all tests passed with total count and duration
       And tests array includes minimal details for each passing test
@@ -21,8 +21,8 @@ def test_execute_tests_with_no_parameters_returns_execution_response() -> None:
     This is the highest-level integration test for the test execution workflow.
     Single assertion: The function should return an ExecuteTestsResponse object.
     """
-    # Act: Call the workflow function we're testing
-    params = ExecuteTestsParams()
+    # Act: Call the workflow function targeting fixture tests
+    params = ExecuteTestsParams(node_ids=["tests/fixtures/sample_tests/"])
     result = execute_tests(params)
 
     # Assert: Function should return ExecuteTestsResponse object
@@ -36,7 +36,7 @@ def test_execute_tests_summary_total_reflects_actual_test_count() -> None:
 
     Acceptance Criteria (Story 4, Scenario 1):
       Given a project with pytest tests (both passing and failing)
-      When the agent calls execute_tests with no parameters
+      When the agent calls execute_tests for fixture tests
       Then summary shows total count matching all tests executed
 
     TDD Round 2: Verify summary contains accurate test count from pytest output.
@@ -47,8 +47,8 @@ def test_execute_tests_summary_total_reflects_actual_test_count() -> None:
 
     Single assertion: summary.total should equal 3 (the actual test count).
     """
-    # Arrange: Create parameters for executing all tests
-    params = ExecuteTestsParams()
+    # Arrange: Create parameters for executing fixture tests
+    params = ExecuteTestsParams(node_ids=["tests/fixtures/sample_tests/"])
 
     # Act: Execute tests
     result = execute_tests(params)
