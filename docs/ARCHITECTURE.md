@@ -144,18 +144,26 @@ Test failures are NOT tool failures - they are expected outcomes:
 
 ### Async Adapter Layer
 
-**Responsibility**: Bridge between async MCP SDK and synchronous domain workflow functions using decorator-based tool routing
+**Responsibility**: Bridge between async MCP SDK and synchronous domain workflow functions using decorator-based tool routing with managed server lifecycle
 
-**Architecture Pattern**: One async adapter function per MCP tool, using SDK's `@server.call_tool()` decorator for automatic registration and name-based routing
+**Architecture Pattern**: Module-scope server initialization with decorator-based tool registration, executed via async context manager lifecycle
 
 **Components**:
+- **Server Instance**: Module-level `Server("pytest-mcp")` created at import time
 - **Tool Adapters**: Async functions decorated with `@server.call_tool()` for each MCP tool
 - **Tool Routing**: Automatic name-based routing (function name matches tool name exactly)
+- **Lifecycle Management**: `stdio_server()` async context manager handles stdio transport setup and cleanup
 - **Parameter Transformation**: Convert MCP dict arguments → Pydantic domain parameter types
 - **Response Transformation**: Convert domain response types → MCP dict results
 - **Error Translation**: Map Pydantic ValidationError → JSON-RPC error responses
 
 **Implementation Location**: `src/pytest_mcp/main.py`
+
+**Server Lifecycle Orchestration**: The architecture separates three lifecycle concerns (ADR-011):
+1. **Declaration (Module Scope)**: Server instance and decorated tool adapters defined at import time
+2. **Initialization (Context Manager Entry)**: `stdio_server()` sets up stdin/stdout streams with proper buffering
+3. **Execution (Event Loop)**: `server.run(read_stream, write_stream)` processes requests until stdin closes
+4. **Cleanup (Context Manager Exit)**: Automatic stream cleanup even on errors
 
 **Tool Registration Pattern**: The SDK's decorator pattern provides declarative tool registration with zero routing code:
 - Each tool adapter decorated with `@server.call_tool()`
@@ -173,13 +181,21 @@ Each adapter follows a consistent three-step pattern:
 2. **Invoke Domain**: Call synchronous domain workflow function with validated parameters
 3. **Transform Response**: `model_dump()` transforms domain type → MCP dict
 
-**Why Decorator-Based Routing**: SDK's decorator pattern eliminates routing logic entirely—tool name matches function name, SDK handles dispatch. Alternative approaches (routing tables, switch statements, class-based handlers) add indirection without architectural benefit.
+**Entry Point Structure**: Async `main()` function uses `stdio_server()` context manager pattern:
+- Context manager handles all stdio stream configuration automatically
+- `server.run()` executes within context to process MCP requests
+- Clean shutdown guaranteed by context manager even on errors
+- Console script bridges sync → async with `asyncio.run(main())`
 
-**Why Async/Sync Bridge**: Domain workflow functions remain synchronous for testability and simplicity. MCP SDK requires async entry points. Adapter layer provides clean separation with minimal overhead.
+**Why Context Manager Lifecycle**: SDK's `stdio_server()` pattern guarantees proper resource management (stream setup, buffering configuration, cleanup) without manual stdio handling. Alternative manual stream management would reimplement SDK functionality without benefit (ADR-011).
+
+**Why Decorator-Based Routing**: SDK's decorator pattern eliminates routing logic entirely—tool name matches function name, SDK handles dispatch. Alternative approaches (routing tables, switch statements, class-based handlers) add indirection without architectural benefit (ADR-010).
+
+**Why Async/Sync Bridge**: Domain workflow functions remain synchronous for testability and simplicity. MCP SDK requires async entry points. Adapter layer provides clean separation with minimal overhead (ADR-009).
 
 **Domain Purity Preservation**: Workflow functions in `domain.py` remain unchanged—no MCP SDK coupling, no async/await complexity. All transport concerns isolated to adapter layer in `main.py`.
 
-**ADR References**: ADR-010 (Tool Routing Architecture), ADR-009 (MCP SDK Integration), ADR-002 (Stateless Architecture)
+**ADR References**: ADR-011 (Server Lifecycle Management), ADR-010 (Tool Routing Architecture), ADR-009 (MCP SDK Integration), ADR-002 (Stateless Architecture)
 
 ### Parameter Validation Layer
 
@@ -556,8 +572,9 @@ All architectural decisions documented in ADRs with explicit rationale:
 | ADR-008 | Security Model | Accepted | Constraint-based interface prevents attack classes by design |
 | ADR-009 | MCP SDK Integration | Accepted | Use official SDK for transport; async adapter layer bridges to domain |
 | ADR-010 | Tool Routing Architecture | Accepted | Decorator-based tool registration with name-based routing; zero routing code |
+| ADR-011 | Server Lifecycle Management | Accepted | stdio_server() context manager for automatic resource management and clean shutdown |
 
-**Architecture Evolution**: ADR-003 rejection demonstrates architecture evolution - programmatic API initially proposed but rejected when isolation requirements clarified. Subprocess integration (ADR-004) provides superior isolation despite minor performance overhead. ADR-010 refines ADR-009's adapter pattern by specifying decorator-based tool routing as the mechanism for connecting MCP tool names to domain functions.
+**Architecture Evolution**: ADR-003 rejection demonstrates architecture evolution - programmatic API initially proposed but rejected when isolation requirements clarified. Subprocess integration (ADR-004) provides superior isolation despite minor performance overhead. ADR-010 refines ADR-009's adapter pattern by specifying decorator-based tool routing as the mechanism for connecting MCP tool names to domain functions. ADR-011 completes the MCP server architecture by establishing the lifecycle orchestration pattern using SDK's context manager for automatic stdio stream management.
 
 ## Deployment Considerations
 
@@ -592,4 +609,4 @@ All architectural decisions documented in ADRs with explicit rationale:
 
 ---
 
-**Architecture Summary**: pytest-mcp synthesizes ten architectural decisions into a cohesive stateless MCP server design. The architecture achieves protocol compliance through official MCP SDK integration, security through constraint-based interface design, reliability through process isolation, and AI agent effectiveness through structured result formatting. The async adapter layer provides clean separation between transport concerns (MCP SDK) and domain logic (workflow functions), using decorator-based tool routing with automatic name-based dispatch to eliminate manual routing code. All quality attributes (consistency, security, performance, reliability, compatibility) are directly supported by architectural decisions with clear traceability to source ADRs.
+**Architecture Summary**: pytest-mcp synthesizes eleven architectural decisions into a cohesive stateless MCP server design. The architecture achieves protocol compliance through official MCP SDK integration, security through constraint-based interface design, reliability through process isolation, and AI agent effectiveness through structured result formatting. The async adapter layer provides clean separation between transport concerns (MCP SDK) and domain logic (workflow functions), using decorator-based tool routing with automatic name-based dispatch to eliminate manual routing code. Server lifecycle orchestration uses SDK's stdio_server() context manager pattern for automatic resource management and graceful shutdown. All quality attributes (consistency, security, performance, reliability, compatibility) are directly supported by architectural decisions with clear traceability to source ADRs.
