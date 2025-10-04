@@ -6,7 +6,9 @@ Domain types and workflow functions are defined in the domain module.
 
 import asyncio
 
-from mcp.server import Server
+from mcp.server import NotificationOptions, Server
+from mcp.server.models import InitializationOptions
+from mcp.server.stdio import stdio_server
 
 from pytest_mcp import domain  # noqa: F401 - imported for type availability
 
@@ -20,12 +22,20 @@ def cli_main() -> None:
 
 
 async def main() -> None:
-    """Start the MCP server.
-
-    Server initialization workflow implemented in domain.initialize_server.
-    Full implementation deferred to TDD phase.
-    """
-    print("Hello, world")  # noqa: T201 - temporary skeleton output
+    """Start the MCP server using stdio_server lifecycle per ADR-011."""
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(
+            read_stream,
+            write_stream,
+            InitializationOptions(
+                server_name="pytest-mcp",
+                server_version="0.1.0",
+                capabilities=server.get_capabilities(
+                    notification_options=NotificationOptions(),
+                    experimental_capabilities={},
+                ),
+            ),
+        )
 
 
 if __name__ == "__main__":

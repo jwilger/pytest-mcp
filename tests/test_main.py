@@ -1,20 +1,10 @@
 """Tests for main module."""
 
-import asyncio
 import tomllib
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-from pytest import CaptureFixture
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from pytest_mcp.main import main
-
-
-def test_main_prints_hello_world(capsys: CaptureFixture[str]) -> None:
-    """Verify main() prints Hello, world."""
-    asyncio.run(main())
-    captured = capsys.readouterr()
-    assert captured.out == "Hello, world\n"
 
 
 def test_cli_main_function_exists() -> None:
@@ -51,3 +41,35 @@ def test_server_instance_exists() -> None:
     from pytest_mcp.main import server
 
     assert isinstance(server, Server)
+
+
+@patch("pytest_mcp.main.stdio_server")
+@patch("pytest_mcp.main.server.run", new_callable=AsyncMock)
+def test_main_uses_stdio_server_lifecycle(
+    mock_server_run: AsyncMock,
+    mock_stdio_server: MagicMock,
+) -> None:
+    """Verify main() uses stdio_server() lifecycle per ADR-011."""
+    import asyncio
+
+    # Mock stdio_server context manager
+    mock_read_stream = MagicMock()
+    mock_write_stream = MagicMock()
+    mock_stdio_server.return_value.__aenter__.return_value = (
+        mock_read_stream,
+        mock_write_stream,
+    )
+
+    # Call main()
+    asyncio.run(main())
+
+    # Verify stdio_server was used
+    mock_stdio_server.assert_called_once()
+
+    # Verify server.run was called
+    mock_server_run.assert_called_once()
+    call_args = mock_server_run.call_args[0]
+    assert call_args[0] == mock_read_stream
+    assert call_args[1] == mock_write_stream
+    # Third arg is InitializationOptions - just verify it's not None
+    assert call_args[2] is not None
