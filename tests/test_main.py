@@ -42,3 +42,12 @@ def test_console_script_entry_point_configured() -> None:
 
     scripts = config.get("project", {}).get("scripts", {})
     assert "pytest-mcp" in scripts
+
+
+def test_server_instance_exists() -> None:
+    """Verify Server instance exists at module scope per ADR-011."""
+    from mcp.server import Server
+
+    from pytest_mcp.main import server
+
+    assert isinstance(server, Server)

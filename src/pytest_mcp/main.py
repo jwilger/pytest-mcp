@@ -6,7 +6,12 @@ Domain types and workflow functions are defined in the domain module.
 
 import asyncio
 
+from mcp.server import Server
+
 from pytest_mcp import domain  # noqa: F401 - imported for type availability
+
+# Module scope: Server instance per ADR-011
+server = Server("pytest-mcp")
 
 
 def cli_main() -> None:
