@@ -162,3 +162,24 @@ def test_discover_tests_tool_handler_exists(
 
     # Verify result is dict (model_dump() called)
     assert isinstance(result, dict)
+
+
+def test_tool_handler_raises_validation_error_for_invalid_arguments() -> None:
+    """Verify tool handlers raise ValidationError for invalid arguments.
+
+    ADR-010 pattern uses Pydantic model_validate() which raises ValidationError
+    for invalid input. This test verifies the error propagates correctly.
+    """
+    import asyncio
+
+    import pytest
+    from pydantic import ValidationError
+
+    from pytest_mcp.main import execute_tests
+
+    # Invalid arguments - execute_tests doesn't accept 'invalid_field'
+    invalid_args = {"invalid_field": "bad_value"}
+
+    # Should raise ValidationError
+    with pytest.raises(ValidationError):
+        asyncio.run(execute_tests(invalid_args))
