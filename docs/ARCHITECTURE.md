@@ -185,7 +185,13 @@ Each adapter follows a consistent three-step pattern:
 - Context manager handles all stdio stream configuration automatically
 - `server.run()` executes within context to process MCP requests
 - Clean shutdown guaranteed by context manager even on errors
-- Console script bridges sync → async with `asyncio.run(main())`
+- Console script entry point (`pytest-mcp` command) bridges sync → async with `asyncio.run(main())`
+
+**Console Script Configuration** (ADR-012): Package installation provides `pytest-mcp` command:
+- pyproject.toml [project.scripts]: `pytest-mcp = pytest_mcp.main:cli_main`
+- Synchronous `cli_main()` wrapper function calls `asyncio.run(main())`
+- Simple command invocation for users and MCP client configuration
+- Standard Python packaging convention for console scripts
 
 **Why Context Manager Lifecycle**: SDK's `stdio_server()` pattern guarantees proper resource management (stream setup, buffering configuration, cleanup) without manual stdio handling. Alternative manual stream management would reimplement SDK functionality without benefit (ADR-011).
 
@@ -195,7 +201,7 @@ Each adapter follows a consistent three-step pattern:
 
 **Domain Purity Preservation**: Workflow functions in `domain.py` remain unchanged—no MCP SDK coupling, no async/await complexity. All transport concerns isolated to adapter layer in `main.py`.
 
-**ADR References**: ADR-011 (Server Lifecycle Management), ADR-010 (Tool Routing Architecture), ADR-009 (MCP SDK Integration), ADR-002 (Stateless Architecture)
+**ADR References**: ADR-012 (Console Script Entry Point), ADR-011 (Server Lifecycle Management), ADR-010 (Tool Routing Architecture), ADR-009 (MCP SDK Integration), ADR-002 (Stateless Architecture)
 
 ### Parameter Validation Layer
 
@@ -573,8 +579,9 @@ All architectural decisions documented in ADRs with explicit rationale:
 | ADR-009 | MCP SDK Integration | Accepted | Use official SDK for transport; async adapter layer bridges to domain |
 | ADR-010 | Tool Routing Architecture | Accepted | Decorator-based tool registration with name-based routing; zero routing code |
 | ADR-011 | Server Lifecycle Management | Accepted | stdio_server() context manager for automatic resource management and clean shutdown |
+| ADR-012 | Console Script Entry Point | Accepted | [project.scripts] entry point with sync wrapper calling asyncio.run(main()) |
 
-**Architecture Evolution**: ADR-003 rejection demonstrates architecture evolution - programmatic API initially proposed but rejected when isolation requirements clarified. Subprocess integration (ADR-004) provides superior isolation despite minor performance overhead. ADR-010 refines ADR-009's adapter pattern by specifying decorator-based tool routing as the mechanism for connecting MCP tool names to domain functions. ADR-011 completes the MCP server architecture by establishing the lifecycle orchestration pattern using SDK's context manager for automatic stdio stream management.
+**Architecture Evolution**: ADR-003 rejection demonstrates architecture evolution - programmatic API initially proposed but rejected when isolation requirements clarified. Subprocess integration (ADR-004) provides superior isolation despite minor performance overhead. ADR-010 refines ADR-009's adapter pattern by specifying decorator-based tool routing as the mechanism for connecting MCP tool names to domain functions. ADR-011 completes the MCP server architecture by establishing the lifecycle orchestration pattern using SDK's context manager for automatic stdio stream management. ADR-012 finalizes the user-facing interface by establishing the console script entry point configuration, completing the MCP server integration from internal architecture to external invocation.
 
 ## Deployment Considerations
 
@@ -587,7 +594,9 @@ All architectural decisions documented in ADRs with explicit rationale:
 ### Production Deployment
 
 **Distribution**: PyPI package installable via `pip` or executable via `uvx pytest-mcp`
-**Execution**: MCP client spawns server process; server spawns pytest subprocesses
+**Console Script**: `pytest-mcp` command available after installation (ADR-012)
+**Execution**: MCP client spawns `pytest-mcp` command; server spawns pytest subprocesses
+**User Invocation**: Direct command-line execution or MCP client configuration
 **Scaling**: Stateless design enables horizontal scaling (multiple server instances)
 **Monitoring**: Future: Push-based telemetry to external monitoring (preserves stateless design)
 
@@ -609,4 +618,4 @@ All architectural decisions documented in ADRs with explicit rationale:
 
 ---
 
-**Architecture Summary**: pytest-mcp synthesizes eleven architectural decisions into a cohesive stateless MCP server design. The architecture achieves protocol compliance through official MCP SDK integration, security through constraint-based interface design, reliability through process isolation, and AI agent effectiveness through structured result formatting. The async adapter layer provides clean separation between transport concerns (MCP SDK) and domain logic (workflow functions), using decorator-based tool routing with automatic name-based dispatch to eliminate manual routing code. Server lifecycle orchestration uses SDK's stdio_server() context manager pattern for automatic resource management and graceful shutdown. All quality attributes (consistency, security, performance, reliability, compatibility) are directly supported by architectural decisions with clear traceability to source ADRs.
+**Architecture Summary**: pytest-mcp synthesizes twelve architectural decisions into a cohesive stateless MCP server design. The architecture achieves protocol compliance through official MCP SDK integration, security through constraint-based interface design, reliability through process isolation, and AI agent effectiveness through structured result formatting. The async adapter layer provides clean separation between transport concerns (MCP SDK) and domain logic (workflow functions), using decorator-based tool routing with automatic name-based dispatch to eliminate manual routing code. Server lifecycle orchestration uses SDK's stdio_server() context manager pattern for automatic resource management and graceful shutdown. Console script entry point configuration provides simple `pytest-mcp` command invocation using standard Python packaging conventions with a synchronous wrapper bridging to the async server lifecycle. All quality attributes (consistency, security, performance, reliability, compatibility) are directly supported by architectural decisions with clear traceability to source ADRs.
