@@ -7,6 +7,11 @@ Domain types and workflow functions are defined in the domain module.
 from pytest_mcp import domain  # noqa: F401 - imported for type availability
 
 
+def cli_main() -> None:
+    """Console script entry point for pytest-mcp server."""
+    pass
+
+
 def main() -> None:
     """Start the MCP server.
 

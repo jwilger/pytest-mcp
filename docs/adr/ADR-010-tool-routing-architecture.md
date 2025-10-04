@@ -1,6 +1,6 @@
 # ADR-010: Tool Routing Architecture Using MCP SDK Decorators
 
-**Status**: proposed
+**Status**: accepted
 
 **Date**: October 3, 2025 (Friday)
 

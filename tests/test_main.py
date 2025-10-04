@@ -10,3 +10,10 @@ def test_main_prints_hello_world(capsys: CaptureFixture[str]) -> None:
     main()
     captured = capsys.readouterr()
     assert captured.out == "Hello, world\n"
+
+
+def test_cli_main_function_exists() -> None:
+    """Verify cli_main() entry point exists per ADR-012."""
+    from pytest_mcp.main import cli_main
+
+    assert callable(cli_main)
